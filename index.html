@@ -226,7 +226,7 @@
   const b64decode = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
   const b64encode = (s) => { let bin = ''; for (const b of new TextEncoder().encode(s)) bin += String.fromCharCode(b); return btoa(bin); };
 
-  const MOCK_NEXT = '# Next step\n\nmade:: 2026-10-01 13:24\nvalid_until:: 2026-10-01 15:39\ntired:: off\n\n## Say this\n\nNext: Water the plants. While you do that, we can talk about the weekend plan.\n\n## After that\n\n1. Do the dishes — unwashed dishes come first (DISHES@2026-09-30)\n2. Eat your first real meal, outside if you can — first meal (MEAL-FIRST@2026-10-01)\n\n## Still open today\n\n- Morning teeth (TEETH-AM@2026-10-01)\n- Dinner (DINNER@2026-10-01)\n\n## Coming up (7 days)\n\n- Fri 10-02: Dentist\n\n## Needs your attention\n\n_Nothing._\n\n## Last saved\n\n_No new reports in this run._\n';
+  const MOCK_NEXT = '# Next step\n\nmade:: 2026-10-01 13:24\nvalid_until:: 2026-10-01 15:39\ntired:: off\n\n## Say this\n\nNext: Water the plants. While you do that, we can talk about the weekend plan.\n\n## After that\n\n1. Do the dishes — unwashed dishes come first (DISHES@2026-09-30)\n2. Eat your first real meal, outside if you can — first meal (MEAL-FIRST@2026-10-01)\n\n## Still open today\n\n- Morning teeth (TEETH-AM@2026-10-01)\n- Dinner (DINNER@2026-10-01)\n\n## Coming up (7 days)\n\n- Fri 10-02: Dentist\n\n## Pressure\n\nlevel:: steady\nfree_until:: 2026-10-01 21:45\nslack_h:: 6.7\nnext_anchor:: 2026-10-01 19:00\n\n- Verdict: You are free until about 9:45 PM. After that, the report has to start for everything due to still fit.\n- You must be present for: the evening feeding at 7 PM.\n\n## Needs your attention\n\n_Nothing._\n\n## Last saved\n\n_No new reports in this run._\n';
   let mockInbox = [];
 
   async function getNext() {
@@ -254,7 +254,7 @@
     if (!next) return;
     $('say').textContent = next.say || 'Nothing is due right now.';
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
-    $('meta').textContent = next.made ? `as of ${next.made.slice(11)}${stale ? ' · refreshing soon' : ''}${next.tired ? ' · tired mode' : ''}` : '';
+    $('meta').textContent = next.made ? `${next.pressure.level ? next.pressure.level + ' · ' : ''}as of ${next.made.slice(11)}${stale ? ' · refreshing soon' : ''}${next.tired ? ' · tired mode' : ''}` : '';
     const fill = (id, arr, empty) => { $(id).innerHTML = ''; for (const t of (arr.length ? arr : [empty])) { const li = document.createElement('li'); li.textContent = t; $(id).appendChild(li); } };
     fill('after', next.after, 'Nothing queued.');
     fill('today', next.today, 'All done.');
@@ -288,7 +288,7 @@
   // ---------- handling what was said ----------
   function handle(text) {
     const r = toCommands(text, today());
-    if (!r.commands.length) return act(r.action);
+    if (!r.commands.length) return act(r.action, r.minutes);
     pendingLines = r.commands;
     $('heard').textContent = `“${text}”`;
     $('pendingTitle').textContent = r.uncertain ? "I'm not sure what that is. Save it as a note?" : 'I\'ll record';
@@ -298,7 +298,9 @@
     $('pending').dataset.action = r.action || '';
     if ($('autosend').checked && !r.uncertain) send();
   }
-  function act(action) {
+  const localNow = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+  function act(action, minutes) {
+    if (action === 'free') { const a = PlannerSpeech.freeAnswer(next.pressure, MOCK ? '2026-10-01 15:00' : localNow(), minutes ?? null); status(a); speak(a); return; }
     if (action === 'list') { document.querySelectorAll('details')[0].open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
     else if (action === 'week') { document.querySelectorAll('details')[1].open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }
     else refresh().then(() => speak(next?.say));

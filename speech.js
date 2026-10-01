@@ -29,6 +29,16 @@
     return { rest: text, date: null };
   }
 
+  /** "for 2 hours", "an hour and a half", "90 minutes" → minutes, or null. */
+  function pullMinutes(low) {
+    const NUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+    let m = low.match(/(\d+(?:\.\d+)?|an?|one|two|three|four|five|six)\s*(?:and a half\s*)?(hours?|hrs?|minutes?|mins?)(\s*and a half)?/);
+    if (!m) return /half an hour/.test(low) ? 30 : null;
+    const n = NUM[m[1]] ?? parseFloat(m[1]);
+    const half = /and a half/.test(m[0]) ? 0.5 : 0;
+    return /^h/.test(m[2]) ? Math.round((n + half) * 60) : Math.round(n);
+  }
+
   const LOAD = '(load \\d+|sheet(?: piece)? \\d+|the sheets?|the washer(?: load)?|the dryer(?: load)?|it|them|everything|all of it)';
   const normLoad = (s) => s.toLowerCase().replace(/^the /, '').replace(/sheet piece/, 'sheet').replace(/ load$/, '').replace(/^(it|them)$/, 'washer').replace(/^(everything|all of it)$/, 'all');
 
@@ -67,6 +77,11 @@
       if (/^(?:what'?s|what is|whats) next|^next up|^what (?:now|should i do)|^check the repo/.test(low)) { out.action = out.action || 'next'; continue; }
       if (/^what'?s left|^day list|^what(?:'s| is) (?:still )?(?:open|remaining)/.test(low)) { out.action = 'list'; continue; }
       if (/^week ahead|^what'?s coming up|^what(?:'s| is) (?:this|the) week/.test(low)) { out.action = 'week'; continue; }
+      if (/^(?:can|should|could|may) i (?:go|hang|leave|take|join|head)|\bdo i have time\b|\bam i free\b|\bbeen invited\b|^how (?:much )?(?:free )?time do i have|^how(?:'s| is) (?:my )?pressure|^is it ok(?:ay)? (?:if i|to) (?:go|hang)/.test(low)) {
+        out.action = 'free';
+        out.minutes = pullMinutes(low);
+        continue;
+      }
 
       if (/\b(?:i'?m|i am|feeling)\b.*\b(?:tired|wiped|exhausted|drained|brain ?dead|worn out)\b/.test(low) && !/\bnot\b/.test(low)) { out.commands.push('tired: on'); continue; }
       if (/^(?:i'?m|i am) (?:fine|ok|okay|good|better)(?: now)?$|\bnot tired\b/.test(low)) { out.commands.push('tired: off'); continue; }
@@ -120,10 +135,34 @@
       made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on',
       say: section('Say this'), after, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), saved: bullets('Last saved'),
+      pressure: { level: field('level'), freeUntil: field('free_until'), slackH: field('slack_h'), nextAnchor: field('next_anchor'), lines: bullets('Pressure') },
     };
   }
 
-  const api = { toCommands, parseNext, pullDate };
+  /**
+   * Answer "can I go (for N minutes)?" from the Pressure section. Pure arithmetic on the engine's numbers.
+   * @param p        parseNext(...).pressure
+   * @param nowStr   "YYYY-MM-DD HH:MM" local time
+   * @param minutes  how long the outing is, or null
+   */
+  function freeAnswer(p, nowStr, minutes) {
+    const t = (s) => (/^\d{4}-/.test(s || '') ? new Date(s.replace(' ', 'T')).getTime() / 60000 : null);
+    const clock = (min) => { const d = new Date(min * 60000); const h = d.getHours(), m = d.getMinutes(); return `${((h + 11) % 12) + 1}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`; };
+    const now = t(nowStr), free = t(p.freeUntil), anchor = t(p.nextAnchor);
+    const verdict = (p.lines.find((l) => l.startsWith('Verdict:')) || '').replace(/^Verdict:\s*/, '');
+    const present = (p.lines.find((l) => l.startsWith('You must be present for:')) || '');
+    if (p.level === 'critical') return `Not a good time. ${verdict}`;
+    if (minutes == null) return `Pressure is ${p.level}. ${verdict}${present ? ' ' + present : ''}`;
+    const end = now + minutes;
+    if (free != null && end > free) {
+      const room = Math.max(0, Math.floor((free - now) / 5) * 5);
+      return `Not for that long. ${verdict} You have about ${room >= 60 ? `${Math.floor(room / 60)} hour${room >= 120 ? 's' : ''}${room % 60 ? ` ${room % 60} minutes` : ''}` : `${room} minutes`}.`;
+    }
+    if (anchor != null && end > anchor) return `Yes, go, but be back by ${clock(anchor)}. ${present} Pressure is ${p.level}.`;
+    return `Yes, go. You'd be done by ${clock(end)}, and you're free until ${free == null ? 'whenever' : clock(free)}. Pressure is ${p.level}.`;
+  }
+
+  const api = { toCommands, parseNext, pullDate, pullMinutes, freeAnswer };
   globalThis.PlannerSpeech = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

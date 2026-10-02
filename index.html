@@ -481,7 +481,7 @@
   :root[data-theme="tile"][data-tile="sage"] #dayline .track, :root[data-theme="tile"][data-tile="cream"] #dayline .track { background:rgba(255,255,255,.45); }
   /* the medallion's star */
   .medal { display:none; }
-  :root[data-theme="tile"] .medal { display:block; width:86%; height:86%; }
+  :root[data-theme="tile"] #core svg.medal { display:block; position:static; width:86%; height:86%; filter:drop-shadow(0 1px 0 rgba(255,255,255,.6)); }
   :root[data-theme="tile"] #core .heart span { display:none; }
   @keyframes tileBreath { 0%,100% { transform:scale(1); } 50% { transform:scale(1.07); } }
   @keyframes spin { to { transform:rotate(360deg); } }

@@ -44,6 +44,10 @@
 
   function laundry(s) {
     let m;
+    if (/\b(?:still|not)\s+(?:a (?:bit|little) )?(?:wet|damp|dry|done|finished|ready)\b|\bneeds? (?:more time|another (?:cycle|round))\b|\brestarted the dryer\b/i.test(s) && /\b(?:dryer|laundry|sheets?|clothes|load|it|they)\b/i.test(s)) return `laundry: ${/washer/i.test(s) ? 'washer' : 'dryer'} still`;
+    if (/\b(?:made|remade) (?:the|my) bed\b|\bsheets? (?:are |is )?(?:back )?on the bed\b/i.test(s)) return 'laundry: sheets away';
+    if (/\b(?:the )?sheets (?:are|is) (?:all )?(?:dry|done)\b|\b(?:took|pulled) (?:all )?the sheets out\b/i.test(s)) return 'laundry: sheets basket';
+    if (/\b(?:all (?:of )?)?(?:the |my )?sheets (?:are|is) (?:all )?in the dryer\b/i.test(s)) return 'laundry: sheets dryer';
     if ((m = s.match(new RegExp(`\\b(?:moved|put|transferred|switched)\\s+${LOAD}\\s+(?:in|into|to|over to)\\s+the dryer`, 'i')))) return `laundry: ${normLoad(m[1])} dryer`;
     if ((m = s.match(new RegExp(`\\b(?:started|put|threw)\\s+${LOAD}\\s+(?:in|into)\\s+the (?:washer|wash)`, 'i')))) return `laundry: ${normLoad(m[1])} washer`;
     if ((m = s.match(/\b(?:started|put in|threw in)\s+a(?: new)? load(?: of ([a-z ]+?))?(?: in the (?:washer|wash))?$/i))) return `laundry: new ${(m[1] || 'clothes').trim()} washer`;

@@ -88,7 +88,9 @@
   #screen > * { flex:0 0 auto; }
   #screen .primary-panel { flex:1 1 auto; min-height:90px; overflow-y:auto; display:flex; flex-direction:column; }
   #screen .primary-panel #say { margin:auto 0; }
-  #menu { flex:0 0 auto; }
+  #screen .row { flex-wrap:nowrap; gap:8px; }
+  #screen .row button { padding:15px 6px; letter-spacing:.08em; flex:1 1 0; min-width:0; }
+  #screen .row #menu { flex:0 0 auto; padding:15px 12px; }
   #drawer { padding-top:6px; }
 
   header { display:flex; align-items:center; justify-content:space-between; gap:10px; font:500 11px/1 var(--display); letter-spacing:var(--label-space); text-transform:uppercase; color:var(--dim); padding:6px 2px 4px; }

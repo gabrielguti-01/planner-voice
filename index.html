@@ -359,16 +359,21 @@
   $('menu').onclick = () => drawer($('drawer').classList.contains('hidden'));
 
   // ---------- the day line ----------
-  // The planner's day changes at 4 AM. The line starts at today's check-in (first open, rounded down to the half hour),
-  // never at an earlier "should have been up" time, and ends at bedtime.
+  // The day line starts at the first open of the day (rounded down to the half hour), never before 6 AM, and stays
+  // there until midnight: refreshing or reopening never moves it. Opening the app between midnight and 6 AM does not
+  // start a new line; that waits for the first open after sleep.
   const p2 = (n) => String(n).padStart(2, '0');
   const HOUR = 3600e3;
-  const dayBase = () => { const d = new Date(Date.now() - 4 * HOUR); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const DAY_FROM = 6 * HOUR;
+  const dayBase = () => { const d = new Date(Date.now() - DAY_FROM); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
   const clockText = (ms) => { const d = new Date(ms), h = d.getHours(), m = d.getMinutes(); return (((h + 11) % 12) + 1) + (m ? ':' + p2(m) : '') + (h < 12 ? ' AM' : ' PM'); };
   function checkIn(force) {
     const base = dayBase(), saved = store.get('checkin').split('|');
-    if (!force && +saved[0] === base && +saved[1]) return +saved[1];
-    const start = base + Math.floor((Date.now() - base) / (30 * 60e3)) * 30 * 60e3;
+    const kept = +saved[0] === base && +saved[1] ? +saved[1] : 0;
+    const night = Date.now() >= base + 24 * HOUR; // midnight to 6 AM: still the day before
+    if (night) return kept || base + DAY_FROM;
+    if (kept && !force) return kept;
+    const start = Math.max(base + DAY_FROM, base + Math.floor((Date.now() - base) / (30 * 60e3)) * 30 * 60e3);
     store.set('checkin', base + '|' + start);
     return start;
   }
@@ -403,7 +408,11 @@
     $('dlEnd').textContent = 'Bed ' + clockText(bed);
     $('dlMid').textContent = zone === 'late' ? 'Past bedtime' : zone === 'winddown' ? 'Winding down' : upcoming || ((next?.day?.events || []).length ? 'Nothing else fixed today' : 'Free day');
   }
-  $('checkin').onclick = () => { checkIn(true); drawDay(); drawer(false); status('Checked in. Your day line starts now.'); };
+  $('checkin').onclick = () => {
+    const night = Date.now() >= dayBase() + 24 * HOUR;
+    checkIn(true); drawDay(); drawer(false);
+    status(night ? 'The day line starts fresh at your first check-in after 6 AM.' : 'Checked in. Your day line starts now.');
+  };
   setInterval(drawDay, 60000);
 
   // ---------- look ----------

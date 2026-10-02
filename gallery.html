@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Planner looks</title>
+<style>
+  html, body { margin:0; background:#07080c; color:#e8eaf2; font:500 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:1400px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p { margin:0 0 18px; color:#9aa0b4; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:22px; }
+  figure { margin:0; }
+  figcaption { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin:0 0 8px; }
+  figcaption b { font-size:17px; }
+  figcaption span { color:#9aa0b4; font-size:14px; }
+  a { color:#8fc4ff; }
+  iframe { display:block; width:100%; height:640px; border:1px solid #2a2e3d; border-radius:14px; background:#000; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Planner looks</h1>
+  <p>All six, running in demo mode. Tap a name to open that one full screen; pick it for good under System → Look.</p>
+  <div class="grid">
+    <figure><figcaption><b><a href="./?mock=1&theme=spider">Web</a></b><span>red on navy, web core</span></figcaption><iframe src="./?mock=1&theme=spider" title="Web look" loading="lazy"></iframe></figure>
+    <figure><figcaption><b><a href="./?mock=1&theme=arc">Arc</a></b><span>cyan and gold rings</span></figcaption><iframe src="./?mock=1&theme=arc" title="Arc look" loading="lazy"></iframe></figure>
+    <figure><figcaption><b><a href="./?mock=1&theme=bat">Cave</a></b><span>black and yellow</span></figcaption><iframe src="./?mock=1&theme=bat" title="Cave look" loading="lazy"></iframe></figure>
+    <figure><figcaption><b><a href="./?mock=1&theme=matrix">Rain</a></b><span>green falling code</span></figcaption><iframe src="./?mock=1&theme=matrix" title="Rain look" loading="lazy"></iframe></figure>
+    <figure><figcaption><b><a href="./?mock=1&theme=ultron">Steel</a></b><span>gunmetal and ember</span></figcaption><iframe src="./?mock=1&theme=ultron" title="Steel look" loading="lazy"></iframe></figure>
+    <figure><figcaption><b><a href="./?mock=1&theme=retro">Mainframe</a></b><span>amber terminal</span></figcaption><iframe src="./?mock=1&theme=retro" title="Mainframe look" loading="lazy"></iframe></figure>
+  </div>
+</main>
+</body>
+</html>

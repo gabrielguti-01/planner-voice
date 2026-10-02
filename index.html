@@ -9,7 +9,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="icon" id="favicon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" id="touchIcon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600&family=Share+Tech+Mono&family=VT323&family=Saira+Condensed:wght@500;700&display=swap" rel="stylesheet">
@@ -653,11 +654,36 @@
       });
     }, 70);
   }
+  // The icon follows the look: background and light are drawn from the current colours. A phone's home screen
+  // keeps the icon it had when the app was added, so a new icon shows only after removing and adding it again.
+  function drawIcon() {
+    try {
+      if (!root || !window.getComputedStyle || !document.createElement) return;
+      const cs = getComputedStyle(root), val = (k, d) => (cs.getPropertyValue(k) || '').trim() || d;
+      const c = document.createElement('canvas');
+      if (!c.getContext) return;
+      c.width = c.height = 180;
+      const g = c.getContext('2d'), bg = val('--bg', '#0b0c10'), p = val('--p', '#ff3b47');
+      g.fillStyle = bg; g.fillRect(0, 0, 180, 180);
+      const halo = g.createRadialGradient(90, 90, 10, 90, 90, 88);
+      halo.addColorStop(0, p); halo.addColorStop(1, bg);
+      g.globalAlpha = 0.55; g.fillStyle = halo; g.fillRect(0, 0, 180, 180); g.globalAlpha = 1;
+      const orb = g.createRadialGradient(78, 74, 4, 90, 90, 44);
+      orb.addColorStop(0, '#ffffff'); orb.addColorStop(0.35, p); orb.addColorStop(1, bg);
+      g.fillStyle = orb; g.beginPath(); g.arc(90, 90, 44, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 3; g.strokeStyle = p; g.beginPath(); g.arc(90, 90, 62, 0, Math.PI * 2); g.stroke();
+      const url = c.toDataURL('image/png');
+      for (const id of ['touchIcon', 'favicon']) { const l = $(id); if (l && l.setAttribute) { l.setAttribute('href', url); if (id === 'favicon') l.setAttribute('type', 'image/png'); } }
+      const meta = document.querySelector && document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', bg);
+    } catch {}
+  }
   function setTheme(t) {
     if (!THEMES.includes(t)) t = 'glass';
     if (root) root.dataset.theme = t;
     $('theme').value = t;
     rain(t === 'matrix');
+    drawIcon();
   }
   const urlTheme = new URLSearchParams(location.search).get('theme');
   // the calm look became the default on 2026-10-02; a look chosen after that is kept
@@ -667,6 +693,7 @@
     const [a, b] = String(v).split(';');
     if (!/^\d+,\d+,\d+$/.test(a) || !root || !root.style) return;
     root.style.setProperty('--glow', a); root.style.setProperty('--glow2', /^\d+,\d+,\d+$/.test(b || '') ? b : a);
+    drawIcon();
   };
   $('glow').value = store.get('glow2', '240,90,150;255,150,80');
   setGlow($('glow').value);

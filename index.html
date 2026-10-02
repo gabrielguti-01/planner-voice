@@ -79,7 +79,9 @@
   body[data-state="saving"]    { --spin:.4; }
   * { box-sizing:border-box; }
   html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink); font:500 18px/1.4 var(--body); -webkit-font-smoothing:antialiased; }
-  body { background: var(--backdrop), var(--bg); background-attachment: fixed; }
+  body { background: var(--bg); }
+  /* the background is its own fixed layer, so it never drifts against the panels while scrolling (iPhones ignore background-attachment: fixed) */
+  #bg { position:fixed; top:0; left:0; right:0; height:100vh; height:100lvh; z-index:-1; pointer-events:none; background: var(--backdrop), var(--bg); }
   body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:5;
     background: repeating-linear-gradient(to bottom, rgba(255,255,255,var(--scan)) 0 1px, transparent 1px 3px), radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.62)); }
   #rain { position:fixed; inset:0; width:100%; height:100%; z-index:0; opacity:.5; display:none; }
@@ -515,6 +517,7 @@
 </style>
 </head>
 <body data-state="idle">
+<div id="bg" aria-hidden="true"></div>
 <canvas id="rain" aria-hidden="true"></canvas>
 <main>
  <div id="screen">

@@ -134,7 +134,9 @@
     return {
       made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on',
       say: section('Say this'), after, today: bullets('Still open today'), week: bullets('Coming up'),
-      attention: bullets('Needs your attention'), late: bullets('Late or waiting'), saved: bullets('Last saved'),
+      attention: bullets('Needs your attention'), late: bullets('Late or waiting'),
+      then: ((section('Now').match(/^- Then: (.*)$/m) || [])[1] || '').trim(),
+      day: { zone: field('zone'), windDown: field('wind_down'), bed: field('bed'), events: section('Day').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim()) }, saved: bullets('Last saved'),
       pressure: { level: field('level'), freeUntil: field('free_until'), slackH: field('slack_h'), nextAnchor: field('next_anchor'), lines: bullets('Pressure') },
     };
   }

@@ -83,7 +83,7 @@
     background: repeating-linear-gradient(to bottom, rgba(255,255,255,var(--scan)) 0 1px, transparent 1px 3px), radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.62)); }
   #rain { position:fixed; inset:0; width:100%; height:100%; z-index:0; opacity:.5; display:none; }
   :root[data-theme="matrix"] #rain { display:block; }
-  main { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:10px 16px calc(14px + env(safe-area-inset-bottom)); --core:clamp(120px, 25vh, 216px); }
+  main { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:10px 16px calc(14px + env(safe-area-inset-bottom)); --core:clamp(96px, 20vh, 180px); }
   #screen { display:flex; flex-direction:column; height:calc(100dvh - 24px - env(safe-area-inset-bottom)); min-height:380px; }
   #screen > * { flex:0 0 auto; }
   #screen .primary-panel { flex:1 1 auto; min-height:90px; overflow-y:auto; display:flex; flex-direction:column; }
@@ -92,6 +92,19 @@
   #screen .row button { padding:15px 6px; letter-spacing:.08em; flex:1 1 0; min-width:0; }
   #screen .row #menu { flex:0 0 auto; padding:15px 12px; }
   #drawer { padding-top:6px; }
+  /* the day line: check-in to bedtime, now marker, fixed events, warm end near bed */
+  #dayline { margin:10px 4px 2px; }
+  #dayline .track { position:relative; height:10px; border-radius:6px; background:rgba(var(--p-rgb),.08); border:1px solid rgba(var(--p-rgb),.28); }
+  #dayline .past { position:absolute; left:0; top:0; bottom:0; border-radius:6px 0 0 6px; background:rgba(var(--p-rgb),.32); }
+  #dayline .wind { position:absolute; right:0; top:0; bottom:0; border-radius:0 6px 6px 0; background:linear-gradient(90deg, transparent, rgba(255,96,64,.6)); }
+  #dayline .ev { position:absolute; top:-4px; height:18px; min-width:3px; border-radius:2px; background:var(--a); box-shadow:0 0 6px rgba(var(--a-rgb),.8); }
+  #dayline .nowdot { position:absolute; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; background:#fff; box-shadow:0 0 0 3px var(--hot), 0 0 12px var(--hot); transition:left .6s; }
+  #dayline .ends { display:flex; justify-content:space-between; gap:8px; margin-top:8px; font:400 12px/1.2 var(--mono); color:var(--dim); }
+  #dlMid { color:var(--ink); text-align:center; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  body[data-zone="winddown"] #dlMid { color:#ffb38a; }
+  body[data-zone="late"] #dlMid { color:#ff8a70; }
+  body[data-zone="winddown"][data-state="idle"] { --hot:#ff8552; }
+  body[data-zone="late"][data-state="idle"] { --hot:#d9603a; --spin:1.6; }
 
   header { display:flex; align-items:center; justify-content:space-between; gap:10px; font:500 11px/1 var(--display); letter-spacing:var(--label-space); text-transform:uppercase; color:var(--dim); padding:6px 2px 4px; }
   header b { color:var(--p); font-weight:700; text-shadow:0 0 12px rgba(var(--p-rgb),.7); }
@@ -119,6 +132,7 @@
     background:radial-gradient(circle at 50% 44%, #fff 0 6%, color-mix(in srgb, var(--hot) 70%, #fff) 14%, var(--hot) 34%, color-mix(in srgb, var(--hot) 55%, #1a0206) 62%, color-mix(in srgb, var(--hot) 22%, transparent) 100%);
     box-shadow:0 0 34px color-mix(in srgb, var(--hot) 75%, transparent), inset 0 0 22px rgba(255,255,255,.35); animation:pulse calc(3.2s * var(--spin)) ease-in-out infinite; }
   #core .heart span { font:700 10px/1 var(--display); letter-spacing:.24em; color:var(--on-p); text-transform:uppercase; }
+  .core-label:empty { display:none; }
   .core-label { margin-top:2px; text-align:center; font:500 10px/1.7 var(--display); letter-spacing:.26em; color:var(--dim); text-transform:uppercase; }
   .core-label b { color:var(--hot); font-weight:700; transition:color .3s; }
   #gauge { display:block; color:var(--ink); letter-spacing:.14em; }
@@ -244,7 +258,12 @@
       </svg>
       <div class="heart"><span>Talk</span></div>
     </button>
-    <div class="core-label"><span id="gauge"></span><b id="meta">loading…</b></div>
+    <div class="core-label"><b id="meta">loading…</b><span id="gauge"></span></div>
+  </div>
+
+  <div id="dayline" aria-label="Today, from check-in to bedtime">
+    <div class="track"><div class="past" id="dlPast"></div><div class="wind" id="dlWind"></div><div id="dlEvents"></div><div class="nowdot" id="dlNow"></div></div>
+    <div class="ends"><span id="dlStart"></span><span id="dlMid"></span><span id="dlEnd"></span></div>
   </div>
 
   <section class="card primary-panel" aria-live="polite">
@@ -272,6 +291,7 @@
  </div>
 
  <div id="drawer" class="hidden">
+  <div class="row" style="margin-top:6px"><button id="checkin">Check in: start my day line now</button></div>
   <section class="card">
     <label for="typed" style="margin-top:0">Manual input</label>
     <div class="row">
@@ -297,6 +317,12 @@
       <option value="ultron">Steel (gunmetal and ember)</option>
       <option value="retro">Mainframe (amber terminal)</option>
     </select>
+    <label for="voice">Voice</label>
+    <select id="voice"></select>
+    <label for="rate">Speaking speed</label>
+    <select id="rate"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select>
+    <div class="row" style="margin-top:10px"><button id="voiceTest">Test voice</button></div>
+    <label class="check"><input type="checkbox" id="pair"> Give me two small steps at a time (experiment)</label>
     <label for="repo">Repository (owner/name)</label>
     <input id="repo" type="text" value="" placeholder="owner/repository" autocomplete="off">
     <label for="token">GitHub access token (stays on this device)</label>
@@ -330,6 +356,54 @@
     else if (!on && window.scrollTo) window.scrollTo(0, 0);
   };
   $('menu').onclick = () => drawer($('drawer').classList.contains('hidden'));
+
+  // ---------- the day line ----------
+  // The planner's day changes at 4 AM. The line starts at today's check-in (first open, rounded down to the half hour),
+  // never at an earlier "should have been up" time, and ends at bedtime.
+  const p2 = (n) => String(n).padStart(2, '0');
+  const HOUR = 3600e3;
+  const dayBase = () => { const d = new Date(Date.now() - 4 * HOUR); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const clockText = (ms) => { const d = new Date(ms), h = d.getHours(), m = d.getMinutes(); return (((h + 11) % 12) + 1) + (m ? ':' + p2(m) : '') + (h < 12 ? ' AM' : ' PM'); };
+  function checkIn(force) {
+    const base = dayBase(), saved = store.get('checkin').split('|');
+    if (!force && +saved[0] === base && +saved[1]) return +saved[1];
+    const start = base + Math.floor((Date.now() - base) / (30 * 60e3)) * 30 * 60e3;
+    store.set('checkin', base + '|' + start);
+    return start;
+  }
+  const css = (el) => el.style || (el.style = {});
+  function drawDay() {
+    const base = dayBase(), nowMs = Date.now(), start = checkIn(false);
+    const parse = (t) => (/^\d{4}-/.test(t || '') ? new Date(t.replace(' ', 'T')).getTime() : 0);
+    let bed = MOCK ? 0 : parse(next?.day?.bed), wind = MOCK ? 0 : parse(next?.day?.windDown);
+    if (!bed || bed <= start || bed > base + 30 * HOUR) { bed = base + 24 * HOUR; wind = bed - 2 * HOUR; }
+    const span = Math.max(bed - start, HOUR);
+    const pct = (ms) => Math.max(0, Math.min(100, ((ms - start) / span) * 100));
+    const zone = nowMs >= bed ? 'late' : nowMs >= wind ? 'winddown' : 'open';
+    if (document.body) document.body.dataset.zone = zone;
+    const pos = Math.max(3, pct(nowMs)); // always a little ahead of the start
+    css($('dlPast')).width = pos + '%';
+    css($('dlNow')).left = pos + '%';
+    css($('dlWind')).left = pct(wind) + '%';
+    $('dlEvents').innerHTML = '';
+    let upcoming = '';
+    for (const e of next?.day?.events || []) {
+      const m = e.match(/^(\d{1,2}):(\d{2})(?:-(\d{1,2}):(\d{2}))?\s+(.*)$/);
+      if (!m) continue;
+      const a = base + (+m[1] * 60 + +m[2]) * 60e3, b = m[3] ? base + (+m[3] * 60 + +m[4]) * 60e3 : a;
+      if (b < start || a > bed) continue;
+      const el = document.createElement('i');
+      el.className = 'ev'; el.title = e;
+      css(el).left = pct(a) + '%'; css(el).width = Math.max(0, pct(b) - pct(a)) + '%';
+      $('dlEvents').appendChild(el);
+      if (!upcoming && b > nowMs) upcoming = m[5] + ' · ' + clockText(a);
+    }
+    $('dlStart').textContent = clockText(start);
+    $('dlEnd').textContent = 'Bed ' + clockText(bed);
+    $('dlMid').textContent = zone === 'late' ? 'Past bedtime' : zone === 'winddown' ? 'Winding down' : upcoming || ((next?.day?.events || []).length ? 'Nothing else fixed today' : 'Free day');
+  }
+  $('checkin').onclick = () => { checkIn(true); drawDay(); drawer(false); status('Checked in. Your day line starts now.'); };
+  setInterval(drawDay, 60000);
 
   // ---------- look ----------
   const THEMES = ['spider', 'arc', 'bat', 'matrix', 'ultron', 'retro'];
@@ -369,9 +443,13 @@
   $('token').value = store.get('token');
   $('autosend').checked = store.get('autosend') === '1';
   $('autospeak').checked = store.get('autospeak', '1') === '1';
+  $('pair').checked = store.get('pair') === '1';
+  $('pair').onchange = () => { store.set('pair', $('pair').checked ? '1' : '0'); render(); };
+  $('rate').value = store.get('rate', '1');
+  $('rate').onchange = () => store.set('rate', $('rate').value);
   $('saveSettings').onclick = () => {
     store.set('repo', $('repo').value.trim()); store.set('token', $('token').value.trim());
-    store.set('autosend', $('autosend').checked ? '1' : '0'); store.set('autospeak', $('autospeak').checked ? '1' : '0');
+    store.set('autosend', $('autosend').checked ? '1' : '0'); store.set('pair', $('pair').checked ? '1' : '0'); store.set('autospeak', $('autospeak').checked ? '1' : '0');
     $('settings').open = false; drawer(false); refresh();
   };
   const status = (t, cls = '') => { $('status').textContent = t; $('status').className = 'meta ' + cls; };
@@ -385,7 +463,7 @@
   const b64decode = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
   const b64encode = (s) => { let bin = ''; for (const b of new TextEncoder().encode(s)) bin += String.fromCharCode(b); return btoa(bin); };
 
-  const MOCK_NEXT = '# Next step\n\nmade:: 2026-10-01 13:24\nvalid_until:: 2026-10-01 15:39\ntired:: off\n\n## Say this\n\nNext: Water the plants. While you do that, we can talk about the weekend plan.\n\n## After that\n\n1. Do the dishes — unwashed dishes come first (DISHES@2026-09-30)\n2. Eat your first real meal, outside if you can — first meal (MEAL-FIRST@2026-10-01)\n\n## Still open today\n\n- Morning teeth (TEETH-AM@2026-10-01)\n- Dinner (DINNER@2026-10-01)\n\n## Coming up (7 days)\n\n- Fri 10-02: Dentist\n\n## Pressure\n\nlevel:: steady\nfree_until:: 2026-10-01 21:45\nslack_h:: 6.7\nnext_anchor:: 2026-10-01 19:00\n\n- Verdict: You are free until about 9:45 PM. After that, the report has to start for everything due to still fit.\n- You must be present for: the evening feeding at 7 PM.\n\n## Needs your attention\n\n_Nothing._\n\n## Last saved\n\n_No new reports in this run._\n';
+  const MOCK_NEXT = '# Next step\n\nmade:: 2026-10-01 13:24\nvalid_until:: 2026-10-01 15:39\ntired:: off\n\n## Say this\n\nNext: Water the plants. While you do that, we can talk about the weekend plan.\n\n## After that\n\n1. Do the dishes — unwashed dishes come first (DISHES@2026-09-30)\n2. Eat your first real meal, outside if you can — first meal (MEAL-FIRST@2026-10-01)\n\n## Still open today\n\n- Morning teeth (TEETH-AM@2026-10-01)\n- Dinner (DINNER@2026-10-01)\n\n## Coming up (7 days)\n\n- Fri 10-02: Dentist\n\n## Pressure\n\nlevel:: steady\nfree_until:: 2026-10-01 21:45\nslack_h:: 6.7\nnext_anchor:: 2026-10-01 19:00\n\n- Verdict: You are free until about 9:45 PM. After that, the report has to start for everything due to still fit.\n- You must be present for: the evening feeding at 7 PM.\n\n## Day\n\nzone:: open\n\n- 10:00-11:15 Chemistry class\n- 19:00-20:30 Muay Thai\n\n## Needs your attention\n\n_Nothing._\n\n## Last saved\n\n_No new reports in this run._\n';
   let mockInbox = [];
 
   async function getNext() {
@@ -411,12 +489,18 @@
   // ---------- render ----------
   function render() {
     if (!next) return;
-    $('say').textContent = next.say || 'Nothing is due right now.';
+    let shown = next.say || 'Nothing is due right now.';
+    if ($('pair').checked && next.then) { // experiment: two small steps together
+      const m = shown.match(/^((?:Saved\. )?.*?[.!?])(\s+[A-Z][\s\S]*)?$/);
+      shown = (m ? m[1] : shown) + ' Then: ' + next.then.charAt(0).toLowerCase() + next.then.slice(1) + '.' + (m && m[2] ? m[2] : '');
+    }
+    $('say').textContent = shown;
+    drawDay();
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
-    const fu = next.pressure.freeUntil;
-    $('gauge').dataset.level = next.pressure.level || '';
-    $('gauge').textContent = !next.pressure.level ? '' : fu && fu !== 'open' ? `${next.pressure.level} · free until ${fu.slice(5).replace('-', '/')}` : `${next.pressure.level} · no deadline waiting`;
-    $('meta').textContent = next.made ? `as of ${next.made.slice(11)}${stale ? ' · refreshing soon' : ''}${next.tired ? ' · tired mode' : ''}` : '';
+    const fu = next.pressure.freeUntil, lvl = next.pressure.level;
+    $('gauge').dataset.level = lvl || '';
+    $('gauge').textContent = (lvl === 'tight' || lvl === 'critical') && fu && fu !== 'open' ? lvl + ' · free until ' + clockText(new Date(fu.replace(' ', 'T')).getTime()) : '';
+    $('meta').textContent = next.tired ? 'tired mode' : '';
     const fill = (id, arr, empty) => { $(id).innerHTML = ''; for (const t of (arr.length ? arr : [empty])) { const li = document.createElement('li'); li.textContent = t; $(id).appendChild(li); } };
     fill('after', next.after, 'Nothing queued.');
     $('afterBox').open = false; // one thing at a time: the rest stays folded until asked for
@@ -441,11 +525,35 @@
   }
 
   // ---------- voice out ----------
+  // Picks the most natural voice the device offers; the user can choose another under System.
+  const V_GOOD = /(premium|enhanced|natural|neural|siri)/i;
+  const V_OK = /(google (us|uk) english|samantha|ava|allison|zoe|evan|nathan|joelle|noelle|aria|jenny|guy|libby|sonia|ryan|daniel|karen|moira|tessa)/i;
+  const V_BAD = /(compact|eloquence|albert|bad news|bahh|bells|boing|bubbles|cellos|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|kathy|ralph|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley)/i;
+  const voiceScore = (v) => (V_GOOD.test(v.name) ? 6 : 0) + (V_OK.test(v.name) ? 3 : 0) - (V_BAD.test(v.name) ? 8 : 0) + (v.lang === 'en-US' ? 1 : 0) + (v.localService === false ? 1 : 0);
+  let voices = [];
+  function loadVoices() {
+    if (!window.speechSynthesis || !speechSynthesis.getVoices) return;
+    voices = speechSynthesis.getVoices().filter((v) => /^en[-_]/i.test(v.lang)).sort((a, b) => voiceScore(b) - voiceScore(a));
+    const sel = $('voice');
+    sel.innerHTML = '';
+    const opt = (value, label) => { const o = document.createElement('option'); o.value = value; o.textContent = label; sel.appendChild(o); };
+    opt('auto', 'Best available' + (voices[0] ? ' (' + voices[0].name + ')' : ''));
+    for (const v of voices) opt(v.name, v.name + ' · ' + v.lang);
+    const saved = store.get('voice', 'auto');
+    sel.value = voices.some((v) => v.name === saved) ? saved : 'auto';
+  }
+  loadVoices();
+  if (window.speechSynthesis && speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', loadVoices);
+  $('voice').onchange = () => store.set('voice', $('voice').value);
+  $('voiceTest').onclick = () => speak('Next: water the plants. Then take a breath, you are doing fine.');
   function speak(text) {
     if (!('speechSynthesis' in window) || !text) return;
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/[`*_#]/g, ''));
-    u.rate = 1.0; lastSpoken = text;
+    const u = new SpeechSynthesisUtterance(text.replace(/[`*_#]/g, '').replace(/\s*\([A-Z0-9][A-Z0-9@#.-]+\)/g, ''));
+    const want = store.get('voice', 'auto');
+    const v = voices.find((x) => x.name === want) || voices[0];
+    if (v) { u.voice = v; u.lang = v.lang; }
+    u.rate = +store.get('rate', '1') || 1; u.pitch = 1; lastSpoken = text;
     u.onstart = () => setState('speaking'); u.onend = u.onerror = () => setState('idle');
     speechSynthesis.speak(u);
   }
@@ -520,6 +628,7 @@
 
   $('core').onclick = () => { if (talk.onclick && !talk.disabled) talk.onclick(); else if ($('typed').focus) $('typed').focus(); };
 
+  drawDay();
   refresh();
   setInterval(() => { if (document.visibilityState === 'visible' && !pendingLines.length) refresh(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });

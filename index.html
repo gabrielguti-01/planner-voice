@@ -27,7 +27,7 @@
       radial-gradient(700px 520px at 50% 108%, rgba(var(--a-rgb),.18), transparent 60%),
       repeating-conic-gradient(from 0deg at 50% 150px, rgba(255,255,255,.035) 0deg .35deg, transparent .35deg 15deg),
       repeating-radial-gradient(circle at 50% 150px, transparent 0 46px, rgba(255,255,255,.03) 46px 47px);
-    --hot:var(--p); --spin:1;
+    --hot:var(--p); --spin:1; --bat:none;
   }
   :root[data-theme="arc"] {
     --bg:#04070c; --panel:rgba(10,22,34,.72); --ink:#d8f4ff; --dim:#6f95a8;
@@ -38,13 +38,17 @@
       linear-gradient(90deg, rgba(var(--p-rgb),.055) 1px, transparent 1px) 0 0 / 38px 100%;
   }
   :root[data-theme="bat"] {
-    --bg:#08090b; --panel:rgba(20,22,26,.86); --ink:#e9e6dc; --dim:#8a8778;
-    --p:#f2c230; --p-rgb:242,194,48; --a:#9aa3ad; --a-rgb:154,163,173; --on-p:#0b0b0c; --listen:#ffffff; --web:none; --rings:block;
-    --display:"Saira Condensed","Rajdhani",system-ui,sans-serif; --label-space:.2em; --cut:0px; --btn-cut:0px; --scan:.018;
+    --bg:#04060a; --panel:rgba(11,14,20,.9); --ink:#e4e8ef; --dim:#75808f;
+    --p:#ffd21f; --p-rgb:255,210,31; --a:#6f8fb5; --a-rgb:111,143,181; --on-p:#07080a; --listen:#ffffff; --web:none; --rings:none; --bat:block;
+    --display:"Saira Condensed","Rajdhani",system-ui,sans-serif; --label-space:.22em; --cut:16px; --btn-cut:12px; --scan:.014;
     --backdrop:
-      radial-gradient(700px 420px at 50% -10%, rgba(var(--p-rgb),.10), transparent 60%),
-      linear-gradient(180deg, rgba(255,255,255,.03), transparent 30%),
-      repeating-linear-gradient(135deg, rgba(255,255,255,.018) 0 2px, transparent 2px 9px);
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 150' preserveAspectRatio='none'%3E%3Cpath fill='%23010203' d='M0 150V96h14V70h10V52h4v18h10v40h12V84h18v30h8V60h6V40h3V22h2v18h3v20h6v64h10V92h16v-14h8v14h6v30h10V74h20v48h8V98h14V58h5V44h8v14h5v70h12V88h18v36h8V66h4V36h3v30h4v50h10V100h16v28h10V78h14v-10h8v10h6v52h12V90h16v60z'/%3E%3Cg fill='%23ffd21f' opacity='.55'%3E%3Cpath d='M30 80h2v3h-2zM58 92h2v3h-2zM64 100h2v3h-2zM91 70h2v3h-2zM91 84h2v3h-2zM128 100h2v3h-2zM166 84h2v3h-2zM174 96h2v3h-2zM213 70h2v3h-2zM219 86h2v3h-2zM246 98h2v3h-2zM275 76h2v3h-2zM275 92h2v3h-2zM300 108h2v3h-2zM333 90h2v3h-2zM339 104h2v3h-2zM372 98h2v3h-2z'/%3E%3C/g%3E%3C/svg%3E") bottom center / 100% 150px no-repeat,
+      linear-gradient(180deg, transparent 55%, rgba(4,6,10,.0) 55%, rgba(var(--p-rgb),.05) 100%),
+      radial-gradient(300px 190px at 50% 150px, rgba(var(--p-rgb),.20), transparent 70%),
+      radial-gradient(520px 260px at 18% 6%, rgba(111,143,181,.13), transparent 70%),
+      radial-gradient(560px 300px at 88% 22%, rgba(111,143,181,.10), transparent 70%),
+      radial-gradient(700px 380px at 40% 46%, rgba(60,74,96,.14), transparent 72%),
+      linear-gradient(180deg, #0a0f18, #04060a 62%);
   }
   :root[data-theme="matrix"] {
     --bg:#000400; --panel:rgba(0,14,4,.78); --ink:#c9ffd4; --dim:#3f9c56;
@@ -95,6 +99,10 @@
   #core .r1 { stroke-width:1.2; stroke-dasharray:2 7; opacity:.75; animation:spin calc(46s * var(--spin)) linear infinite; }
   #core .web { display:var(--web); stroke-width:1.1; opacity:.7; stroke-linejoin:round; animation:spin calc(60s * var(--spin)) linear infinite; }
   #core .rings { display:var(--rings); }
+  #core .bat { display:var(--bat); }
+  #core .bat ellipse { fill:var(--hot); transition:fill .35s; }
+  #core .bat path { fill:#04060a; }
+  #core .bat .beam { fill:url(#beam); }
   #core .r3 { stroke-width:1.4; stroke-dasharray:1 10; opacity:.9; animation:spin calc(26s * var(--spin)) linear infinite; }
   #core .r5 { stroke-width:3; stroke-dasharray:118 36 40 36; stroke-linecap:round; animation:spin calc(17s * var(--spin)) linear infinite reverse; }
   #core .r2 { stroke:var(--a); stroke-width:2.2; stroke-dasharray:70 22 18 22; stroke-linecap:round; animation:spin calc(13s * var(--spin)) linear infinite reverse; }
@@ -110,8 +118,21 @@
 
   /* theme-specific shapes */
   :root[data-theme="ultron"] #core .heart { border-radius:18% 18% 46% 46% / 22% 22% 60% 60%; width:96px; height:70px; }
-  :root[data-theme="bat"] #core .heart { border-radius:6px; width:104px; height:54px; clip-path:polygon(0 30%, 18% 0, 34% 26%, 50% 8%, 66% 26%, 82% 0, 100% 30%, 86% 100%, 14% 100%); }
-  :root[data-theme="bat"] #core .r1, :root[data-theme="bat"] #core .r3 { opacity:.35; }
+  :root[data-theme="bat"] header b { font-size:0; text-shadow:none; }
+  :root[data-theme="bat"] header b::after { content:"Batcomputer"; font-size:11px; text-shadow:0 0 12px rgba(var(--p-rgb),.7); }
+  :root[data-theme="bat"] #core { height:190px; }
+  :root[data-theme="bat"] #core svg { top:-13px; filter:drop-shadow(0 0 16px color-mix(in srgb, var(--hot) 55%, transparent)); }
+  :root[data-theme="bat"] #core .heart { background:none; box-shadow:none; animation:none; }
+  :root[data-theme="bat"] #core .heart span { display:none; }
+  :root[data-theme="bat"] #core .r2 { display:none; }
+  :root[data-theme="bat"] #core .r1 { opacity:.3; stroke:var(--a); }
+  :root[data-theme="bat"] #core .r4 { stroke:var(--a); stroke-width:2; opacity:.7; }
+  :root[data-theme="bat"] #core .bat { animation:signal calc(4s * var(--spin)) ease-in-out infinite; transform-origin:108px 108px; }
+  :root[data-theme="bat"] .card { border-color:rgba(111,143,181,.28); box-shadow:inset 0 0 30px rgba(0,0,0,.55); }
+  :root[data-theme="bat"] .primary-panel { border-color:rgba(var(--p-rgb),.55); border-top:3px solid var(--p); }
+  :root[data-theme="bat"] #say { text-shadow:none; font-family:var(--display); font-weight:500; font-size:25px; letter-spacing:.01em; }
+  :root[data-theme="bat"] button { font-size:14px; }
+  :root[data-theme="bat"] main { padding-bottom:calc(150px + env(safe-area-inset-bottom)); }
   :root[data-theme="retro"] #core { width:auto; height:auto; padding:10px 0 4px; }
   :root[data-theme="retro"] #core svg { display:none; }
   :root[data-theme="retro"] #core .heart { width:auto; height:auto; border-radius:0; background:none; box-shadow:none; animation:none; border:2px solid var(--p); padding:10px 22px; }
@@ -175,6 +196,7 @@
   @keyframes pulse { 0%,100% { transform:scale(.94); opacity:.86; } 50% { transform:scale(1.04); opacity:1; } }
   @keyframes breathe { 0%,100% { opacity:.45; } 50% { opacity:1; } }
   @keyframes reveal { from { opacity:0; transform:translateY(6px); filter:blur(3px); } to { opacity:1; transform:none; filter:none; } }
+  @keyframes signal { 0%,100% { opacity:.9; transform:scale(.985); } 50% { opacity:1; transform:scale(1.015); } }
   @keyframes blink { 50% { opacity:0; } }
   @keyframes flicker { 0%,100% { opacity:1; } 92% { opacity:1; } 93% { opacity:.86; } 94% { opacity:1; } 97% { opacity:.93; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } #rain { display:none !important; } }
@@ -202,6 +224,12 @@
         <g class="rings">
           <circle class="r r5" cx="108" cy="108" r="86"/>
           <circle class="r r3" cx="108" cy="108" r="74"/>
+        </g>
+        <g class="bat">
+          <defs><linearGradient id="beam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffd21f" stop-opacity="0"/><stop offset="1" stop-color="#ffd21f" stop-opacity=".22"/></linearGradient></defs>
+          <path class="beam" d="M92 330L16 108H200L124 330Z"/>
+          <ellipse cx="108" cy="108" rx="94" ry="56"/>
+          <path d="M108 97L113 80L119 95C130 99 140 93 146 79C160 73 176 76 185 85C191 97 187 110 176 120Q164 104 152 126Q141 110 130 130Q118 114 108 144Q98 114 86 130Q75 110 64 126Q52 104 40 120C29 110 25 97 31 85C40 76 56 73 70 79C76 93 86 99 97 95L103 80Z"/>
         </g>
         <circle class="r r4" cx="108" cy="108" r="96"/>
         <circle class="r r2" cx="108" cy="108" r="58"/>
@@ -250,7 +278,7 @@
     <select id="theme">
       <option value="spider">Web (red on navy)</option>
       <option value="arc">Arc (cyan and gold)</option>
-      <option value="bat">Cave (black and yellow)</option>
+      <option value="bat">Cave (bat signal over the city)</option>
       <option value="matrix">Rain (green code)</option>
       <option value="ultron">Steel (gunmetal and ember)</option>
       <option value="retro">Mainframe (amber terminal)</option>

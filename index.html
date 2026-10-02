@@ -445,11 +445,30 @@
   :root[data-theme="tile"][data-orn="0"] .card, :root[data-theme="tile"][data-orn="0"] button { border-color:rgba(var(--gold-rgb),.28); }
   :root[data-theme="tile"][data-orn="0"] .card::before, :root[data-theme="tile"][data-orn="1"] .card::before { display:none; }
   :root[data-theme="tile"][data-orn="0"] h2::before, :root[data-theme="tile"][data-orn="0"] summary::before, :root[data-theme="tile"][data-orn="1"] h2::before, :root[data-theme="tile"][data-orn="1"] summary::before { content:""; }
+  :root[data-theme="tile"][data-orn="1"] #core::after { display:none; }
   :root[data-theme="tile"][data-orn="0"] #core::after { display:none; }
   :root[data-theme="tile"][data-orn="0"] #core::before { border-width:1px; box-shadow:inset 0 2px 0 rgba(255,225,205,.2), inset 0 -14px 26px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.5); }
   :root[data-theme="tile"][data-orn="0"] h2, :root[data-theme="tile"][data-orn="0"] summary, :root[data-theme="tile"][data-orn="0"] label { letter-spacing:.06em; }
-  :root[data-theme="tile"][data-orn="1"] { --v1:.74; --v2:.88; --label-space:.16em; }
-  :root[data-theme="tile"][data-orn="1"] .card { border-color:rgba(var(--gold-rgb),.42); }
+  /* Classic (level 1) and Plain (level 0): one flat deep colour, hairline gold, a serif line of text, a plain compass star */
+  :root[data-theme="tile"][data-orn="1"] { --label-space:.14em; --body:system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif; --display:system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    --backdrop:radial-gradient(140% 90% at 50% -10%, rgb(var(--t2)), rgb(var(--t3)) 62%); }
+  :root[data-theme="tile"][data-orn="1"] #say { font-family:"Cormorant Garamond","Iowan Old Style","Palatino Linotype",Georgia,serif; font-weight:600; font-size:29px; }
+  :root[data-theme="tile"][data-orn="0"] .card, :root[data-theme="tile"][data-orn="1"] .card { background:linear-gradient(180deg, rgba(var(--t2),.45), rgba(var(--t3),.55)); border:1px solid rgba(var(--gold-rgb),.24); box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 8px 24px rgba(0,0,0,.3); }
+  :root[data-theme="tile"][data-orn="0"] button, :root[data-theme="tile"][data-orn="1"] button { background:rgba(var(--t2),.45); border:1px solid rgba(var(--gold-rgb),.28); box-shadow:none; letter-spacing:.06em; font-size:14px; font-weight:600; }
+  :root[data-theme="tile"][data-orn="0"] button.primary, :root[data-theme="tile"][data-orn="1"] button.primary { background:#eee2cd; color:rgb(var(--t2)); border-color:transparent; box-shadow:none; }
+  :root[data-theme="tile"][data-orn="0"] h2, :root[data-theme="tile"][data-orn="1"] h2, :root[data-theme="tile"][data-orn="0"] summary, :root[data-theme="tile"][data-orn="1"] summary, :root[data-theme="tile"][data-orn="0"] label, :root[data-theme="tile"][data-orn="1"] label { font-family:system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif; font-size:11px; letter-spacing:.14em; color:rgba(var(--gold-rgb),.85); }
+  :root[data-theme="tile"][data-orn="0"] label.check, :root[data-theme="tile"][data-orn="1"] label.check { font-size:16px; letter-spacing:0; }
+  :root[data-theme="tile"][data-orn="0"] #core::before, :root[data-theme="tile"][data-orn="1"] #core::before { background:none; border:1px solid rgba(var(--gold-rgb),.5); box-shadow:none; }
+  :root[data-theme="tile"][data-orn="0"] #core .heart, :root[data-theme="tile"][data-orn="1"] #core .heart { width:calc(var(--core) * .66); height:calc(var(--core) * .66); background:none; box-shadow:none; color:rgb(var(--gold-rgb)); }
+  :root[data-theme="tile"][data-orn="0"] #core .heart svg.medal, :root[data-theme="tile"][data-orn="1"] #core .heart svg.medal { width:100%; height:100%; filter:none; }
+  :root[data-theme="tile"][data-orn="0"] body[data-state] #core .heart, :root[data-theme="tile"][data-orn="1"] body[data-state] #core .heart { box-shadow:none; }
+  :root[data-theme="tile"][data-orn="0"] body[data-state="listening"] #core .heart svg.medal, :root[data-theme="tile"][data-orn="1"] body[data-state="listening"] #core .heart svg.medal { filter:drop-shadow(0 0 8px rgba(var(--gold-rgb),.9)); }
+  :root[data-theme="tile"][data-orn="0"] body[data-state="speaking"] #core .heart svg.medal, :root[data-theme="tile"][data-orn="1"] body[data-state="speaking"] #core .heart svg.medal { filter:drop-shadow(0 0 6px rgba(var(--acc1-rgb),.8)); }
+  :root[data-theme="tile"][data-orn="0"] #dayline .track, :root[data-theme="tile"][data-orn="1"] #dayline .track { height:4px; border:0; background:rgba(var(--gold-rgb),.18); }
+  :root[data-theme="tile"][data-orn="0"] #dayline .past, :root[data-theme="tile"][data-orn="1"] #dayline .past { background:rgba(var(--gold-rgb),.7); }
+  :root[data-theme="tile"][data-orn="0"] .capsule, :root[data-theme="tile"][data-orn="1"] .capsule { border:0; background:none; padding:0; }
+  :root[data-theme="tile"] .scallop { display:none; }
+  :root[data-theme="tile"][data-orn="3"] .scallop { display:inline; }
   :root[data-theme="tile"][data-orn="3"] { --v1:.06; --v2:.40; }
   :root[data-theme="tile"][data-orn="3"] .card::after { display:block; content:""; position:absolute; top:11px; right:11px; bottom:11px; left:11px; width:auto; height:auto; border:1px dotted rgba(var(--gold-rgb),.45); border-radius:9px; opacity:1; pointer-events:none; }
   :root[data-theme="tile"][data-orn="3"] .card { border-width:2px; }
@@ -478,6 +497,7 @@
   :root[data-theme="tile"][data-tile="sage"] button.primary, :root[data-theme="tile"][data-tile="cream"] button.primary { background:linear-gradient(170deg, #8a2230, #5a141b); color:#f6efe4; border-color:#5a141b; }
   :root[data-theme="tile"][data-tile="sage"] input[type=text], :root[data-theme="tile"][data-tile="cream"] input[type=text], :root[data-theme="tile"][data-tile="sage"] select, :root[data-theme="tile"][data-tile="cream"] select, :root[data-theme="tile"][data-tile="sage"] input[type=password], :root[data-theme="tile"][data-tile="cream"] input[type=password] { background:rgba(255,255,255,.5); color:var(--ink); }
   :root[data-theme="tile"][data-tile="sage"] #core::before, :root[data-theme="tile"][data-tile="cream"] #core::before { background:radial-gradient(circle at 38% 30%, #fbf6ec, rgb(var(--t2)) 70%); box-shadow:0 0 0 5px rgba(var(--t3),.9), 0 0 0 6px rgba(110,26,34,.6), 0 10px 24px rgba(60,20,20,.2); }
+  :root[data-theme="tile"][data-tile="sage"] button.primary, :root[data-theme="tile"][data-tile="cream"] button.primary { color:#f6efe4; }
   :root[data-theme="tile"][data-tile="sage"] #dayline .track, :root[data-theme="tile"][data-tile="cream"] #dayline .track { background:rgba(255,255,255,.45); }
   /* the medallion's star */
   .medal { display:none; }
@@ -527,7 +547,7 @@
         <circle class="r r4" cx="108" cy="108" r="96"/>
         <circle class="r r2" cx="108" cy="108" r="58"/>
       </svg>
-      <div class="heart"><span>Talk</span><svg class="medal" viewBox="0 0 100 100" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="55.74" cy="36.14" r="6.6"/><circle cx="63.86" cy="44.26" r="6.6"/><circle cx="63.86" cy="55.74" r="6.6"/><circle cx="55.74" cy="63.86" r="6.6"/><circle cx="44.26" cy="63.86" r="6.6"/><circle cx="36.14" cy="55.74" r="6.6"/><circle cx="36.14" cy="44.26" r="6.6"/><circle cx="44.26" cy="36.14" r="6.6"/></g><g fill="none" stroke="currentColor" stroke-width="1" stroke-opacity=".7"><circle cx="55.74" cy="36.14" r="9"/><circle cx="63.86" cy="44.26" r="9"/><circle cx="63.86" cy="55.74" r="9"/><circle cx="55.74" cy="63.86" r="9"/><circle cx="44.26" cy="63.86" r="9"/><circle cx="36.14" cy="55.74" r="9"/><circle cx="36.14" cy="44.26" r="9"/><circle cx="44.26" cy="36.14" r="9"/></g><path fill="currentColor" d="M53.2 50L50 4L46.8 50ZM50 53.2L96 50L50 46.8ZM46.8 50L50 96L53.2 50ZM50 46.8L4 50L50 53.2ZM51.84 51.84L66.97 33.03L48.16 48.16ZM48.16 51.84L66.97 66.97L51.84 48.16ZM48.16 48.16L33.03 66.97L51.84 51.84ZM51.84 48.16L33.03 33.03L48.16 51.84Z"/><circle cx="50" cy="50" r="4" fill="currentColor"/><circle cx="50" cy="1" r="1.3" fill="currentColor" stroke="none"/><circle cx="99" cy="50" r="1.3" fill="currentColor" stroke="none"/><circle cx="50" cy="99" r="1.3" fill="currentColor" stroke="none"/><circle cx="1" cy="50" r="1.3" fill="currentColor" stroke="none"/></svg></div>
+      <div class="heart"><span>Talk</span><svg class="medal" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="31" fill="none" stroke="currentColor" stroke-width=".8" stroke-opacity=".55"/><g class="scallop" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="55.74" cy="36.14" r="6.6"/><circle cx="63.86" cy="44.26" r="6.6"/><circle cx="63.86" cy="55.74" r="6.6"/><circle cx="55.74" cy="63.86" r="6.6"/><circle cx="44.26" cy="63.86" r="6.6"/><circle cx="36.14" cy="55.74" r="6.6"/><circle cx="36.14" cy="44.26" r="6.6"/><circle cx="44.26" cy="36.14" r="6.6"/></g><g class="scallop" fill="none" stroke="currentColor" stroke-width="1" stroke-opacity=".7"><circle cx="55.74" cy="36.14" r="9"/><circle cx="63.86" cy="44.26" r="9"/><circle cx="63.86" cy="55.74" r="9"/><circle cx="55.74" cy="63.86" r="9"/><circle cx="44.26" cy="63.86" r="9"/><circle cx="36.14" cy="55.74" r="9"/><circle cx="36.14" cy="44.26" r="9"/><circle cx="44.26" cy="36.14" r="9"/></g><path fill="currentColor" d="M53.2 50L50 4L46.8 50ZM50 53.2L96 50L50 46.8ZM46.8 50L50 96L53.2 50ZM50 46.8L4 50L50 53.2ZM51.84 51.84L66.97 33.03L48.16 48.16ZM48.16 51.84L66.97 66.97L51.84 48.16ZM48.16 48.16L33.03 66.97L51.84 51.84ZM51.84 48.16L33.03 33.03L48.16 51.84Z"/><circle cx="50" cy="50" r="4" fill="currentColor"/><circle cx="50" cy="1" r="1.3" fill="currentColor" stroke="none"/><circle cx="99" cy="50" r="1.3" fill="currentColor" stroke="none"/><circle cx="50" cy="99" r="1.3" fill="currentColor" stroke="none"/><circle cx="1" cy="50" r="1.3" fill="currentColor" stroke="none"/></svg></div>
     </button>
     <div class="core-label"><b id="meta">loading…</b><span id="gauge"></span></div>
   </div>
@@ -594,8 +614,8 @@
     <label for="orn">How elegant (Tile look)</label>
     <select id="orn">
       <option value="0">Plain: colour only</option>
-      <option value="1">Casual: a hint of gold and flowers</option>
-      <option value="2">Elegant: gold frames and line art</option>
+      <option value="1">Classic: quiet, a little gold (recommended)</option>
+      <option value="2">Decorated: gold frames and line art</option>
       <option value="3">Ornate: everything</option>
     </select>
     <label for="tileHue">Colour (Tile look)</label>
@@ -811,13 +831,18 @@
       g.save(); g.translate(-0.8, -1.1); g.strokeStyle = light; g.lineWidth = w * 0.45; draw(); g.stroke(); g.restore();
     };
     const rr = (x, y, s, r) => () => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + s, y, x + s, y + s, r); g.arcTo(x + s, y + s, x, y + s, r); g.arcTo(x, y + s, x, y, r); g.arcTo(x, y, x + s, y, r); g.closePath(); };
+    const quiet = (root.dataset.orn || '1') < '2';
+    if (quiet) { // a deep tile, one hairline frame, the compass star in cream
+      g.strokeStyle = 'rgba(234,217,189,.55)'; g.lineWidth = 2; rr(18, 18, 144, 16)(); g.stroke();
+    } else {
     relief(rr(10, 10, 160, 14), 'rgba(255,255,255,.38)', T1, 5);
     relief(rr(40, 40, 100, 10), 'rgba(255,255,255,.38)', T1, 4);
     for (const [cx, cy, sx, sy] of [[25, 25, 1, 1], [155, 25, -1, 1], [25, 155, 1, -1], [155, 155, -1, -1]]) { // corner flourishes
       relief(() => { g.beginPath(); g.moveTo(cx - 6 * sx, cy + 14 * sy); g.quadraticCurveTo(cx - 2 * sx, cy - 2 * sy, cx + 14 * sx, cy - 6 * sy); g.moveTo(cx + 2 * sx, cy + 2 * sy); g.quadraticCurveTo(cx + 12 * sx, cy + 4 * sy, cx + 12 * sx, cy + 12 * sy); }, 'rgba(255,255,255,.42)', T1, 3);
     }
     for (const [x, y] of [[90, 25], [90, 155], [25, 90], [155, 90]]) relief(() => { g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x + 5, y); g.lineTo(x, y + 6); g.lineTo(x - 5, y); g.closePath(); }, 'rgba(255,255,255,.42)', T1, 2.5);
-    // the star-flower, raised in cream
+    }
+    // the compass star, raised in cream
     const P = (ang, r) => [90 + r * Math.sin(ang), 90 - r * Math.cos(ang)];
     const starPath = () => { g.beginPath();
       for (let i = 0; i < 8; i++) { const ang = i * Math.PI / 4, len = i % 2 ? 22 : 44, w = i % 2 ? 3.2 : 4.2;
@@ -825,7 +850,7 @@
     g.save(); g.translate(1.8, 2.4); g.fillStyle = 'rgba(10,1,4,.75)'; starPath(); g.fill(); g.restore();
     g.fillStyle = '#ead9bd'; starPath(); g.fill();
     g.save(); g.translate(-0.7, -1); g.fillStyle = 'rgba(255,252,244,.85)'; g.beginPath(); for (let i = 0; i < 8; i += 2) { const [x1, y1] = P(i * Math.PI / 4, 40), [x2, y2] = P(i * Math.PI / 4 + Math.PI / 2, 1.6); g.moveTo(90, 90); g.lineTo(x2, y2); g.lineTo(x1, y1); g.closePath(); } g.fill(); g.restore();
-    for (let i = 0; i < 8; i++) { const [x, y] = P(Math.PI / 8 + i * Math.PI / 4, 13); relief(() => { g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); }, '#fffaf0', '#d8c4a4', 2.2); }
+    if (!quiet) for (let i = 0; i < 8; i++) { const [x, y] = P(Math.PI / 8 + i * Math.PI / 4, 13); relief(() => { g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); }, '#fffaf0', '#d8c4a4', 2.2); }
     relief(() => { g.beginPath(); g.arc(90, 90, 3.5, 0, Math.PI * 2); }, '#fffaf0', '#e2d0b4', 4);
     const gloss = g.createLinearGradient(0, 0, 180, 180);
     gloss.addColorStop(0, 'rgba(255,235,225,.22)'); gloss.addColorStop(0.35, 'rgba(255,235,225,0)');
@@ -869,7 +894,7 @@
   const setOrn = (v) => { if (root) root.dataset.orn = /^[0-3]$/.test(v) ? v : '1'; };
   $('orn').value = store.get('orn', '1');
   setOrn($('orn').value);
-  $('orn').onchange = () => { store.set('orn', $('orn').value); setOrn($('orn').value); };
+  $('orn').onchange = () => { store.set('orn', $('orn').value); setOrn($('orn').value); drawIcon(); };
   const setTile = (v) => { if (root) root.dataset.tile = v; drawIcon(); };
   $('tileHue').value = store.get('tileHue', 'oxblood');
   setTile($('tileHue').value);

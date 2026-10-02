@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@400;500;600&family=Share+Tech+Mono&family=VT323&family=Saira+Condensed:wght@500;700&display=swap" rel="stylesheet">
-<title>Arete</title>
+<title>To-Do</title>
 <style>
   /* ---------- themes: each one only sets variables ---------- */
   :root {
@@ -206,7 +206,7 @@
 <canvas id="rain" aria-hidden="true"></canvas>
 <main>
   <header>
-    <span><b>Arete</b> · v1</span>
+    <span><b>To-Do</b> · v1</span>
     <span class="capsule"><i class="led"></i><span id="mode">ONLINE</span></span>
     <span id="clock">--:--</span>
   </header>
@@ -456,7 +456,7 @@
       const made = next?.made;
       // the queue is already computed: give the next step right away, then confirm when the engine has run
       const upNext = next?.after[0];
-      status('Saved. Arete is updating…');
+      status('Saved. Updating…');
       if ($('autospeak').checked) speak(upNext ? `Saved. Next: ${upNext}.` : 'Saved.');
       if (MOCK) return status(`Saved (demo). Inbox: ${mockInbox.join(' | ')}`);
       for (let i = 0; i < 12; i++) { // up to ~2 minutes
@@ -464,7 +464,7 @@
         const fresh = parseNext(await getNext());
         if (fresh.made !== made) { next = fresh; render(); status('Updated.'); if (next.attention.length && $('autospeak').checked) speak(`One thing needs your attention: ${next.attention[0]}`); return; }
       }
-      status('Saved. Arete will catch up on its next run.', 'warn');
+      status('Saved. It will catch up on its next run.', 'warn');
     } catch (e) { setState('idle'); pendingLines = lines; status(`Not saved: ${e.message}`, 'bad'); if ($('autospeak').checked) speak('Not saved.'); }
     finally { $('send').disabled = false; }
   }

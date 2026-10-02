@@ -134,7 +134,7 @@
     return {
       made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on',
       say: section('Say this'), after, today: bullets('Still open today'), week: bullets('Coming up'),
-      attention: bullets('Needs your attention'), saved: bullets('Last saved'),
+      attention: bullets('Needs your attention'), late: bullets('Late or waiting'), saved: bullets('Last saved'),
       pressure: { level: field('level'), freeUntil: field('free_until'), slackH: field('slack_h'), nextAnchor: field('next_anchor'), lines: bullets('Pressure') },
     };
   }

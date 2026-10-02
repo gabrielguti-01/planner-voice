@@ -283,6 +283,7 @@
   <section class="card hidden" id="attentionCard"><h2>Alert</h2><ul id="attention"></ul></section>
   <details class="card" id="afterBox"><summary>After this one</summary><ol id="after"></ol></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
+  <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
   <details class="card" id="weekBox"><summary>Coming up this week</summary><ul id="week"></ul></details>
 
   <details class="card" id="settings">
@@ -423,6 +424,9 @@
     fill('week', next.week, 'Nothing dated.');
     fill('attention', next.attention, '');
     $('attentionCard').classList.toggle('hidden', !next.attention.length);
+    fill('late', next.late || [], '');
+    $('lateBox').classList.toggle('hidden', !(next.late || []).length);
+    if ($('drawer').classList.contains('hidden')) $('menu').textContent = next.attention.length ? 'More (' + next.attention.length + ')' : 'More';
   }
   async function refresh(speakIfNew = false) {
     if (!MOCK && !store.get('token')) { $('say').textContent = 'Open Settings below and add your GitHub token to connect.'; $('meta').textContent = 'not connected'; $('settings').open = true; drawer(true); return; }

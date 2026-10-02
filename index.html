@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" data-theme="sleek">
+<html lang="en" data-theme="glass">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#25262a">
+<meta name="theme-color" content="#0b0c10">
 <meta name="robots" content="noindex">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -312,6 +312,66 @@
   @keyframes softListen { 0%,100% { transform:scale(1); } 50% { transform:scale(1.28); } }
   @keyframes softSpeak { 0%,100% { transform:scale(.98); } 30% { transform:scale(1.2); } 60% { transform:scale(1.06); } }
   @keyframes softSave { 0% { opacity:.5; transform:scale(.96); } 50% { opacity:1; transform:scale(1.12); } 100% { opacity:.5; transform:scale(.96); } }
+  /* ---------- Glass: a dark, quiet room with frosted panes and one soft light ---------- */
+  :root[data-theme="glass"] {
+    --bg:#0b0c10; --panel:rgba(255,255,255,.055); --ink:#f2f3f5; --dim:#9a9ca6;
+    --p:rgb(var(--glow)); --p-rgb:var(--glow); --a:#f2f3f5; --a-rgb:242,243,245; --on-p:#0b0c10; --listen:rgb(var(--glow)); --web:none; --rings:none;
+    --display:system-ui,-apple-system,"SF Pro Display","Segoe UI",Roboto,sans-serif; --body:system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    --label-space:.03em; --say-size:25px; --cut:0px; --btn-cut:0px; --scan:0;
+    --backdrop:radial-gradient(520px 420px at 18% 8%, rgba(var(--glow2),.20), transparent 70%), radial-gradient(560px 460px at 88% 30%, rgba(var(--glow),.18), transparent 70%), radial-gradient(620px 520px at 40% 104%, rgba(var(--glow),.12), transparent 70%);
+  }
+  :root[data-theme="glass"] body::before { display:none; }
+  :root[data-theme="glass"] header { text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; }
+  :root[data-theme="glass"] header b { color:var(--ink); text-shadow:none; font-weight:600; }
+  :root[data-theme="glass"] .capsule { border:0; background:none; padding:0; color:var(--dim); }
+  :root[data-theme="glass"] .led { width:6px; height:6px; background:rgb(var(--glow)); box-shadow:0 0 8px rgb(var(--glow)); }
+  :root[data-theme="glass"] #clock { font-family:var(--body); letter-spacing:0; color:var(--dim); }
+
+  :root[data-theme="glass"] #core svg { display:none; }
+  /* the light behind the glass */
+  :root[data-theme="glass"] #core::before { content:""; position:absolute; inset:-18%; border-radius:50%; pointer-events:none; filter:blur(22px);
+    background:radial-gradient(circle, rgba(var(--glow),.55), rgba(var(--glow2),.22) 48%, transparent 70%); opacity:.55; transition:opacity .5s; animation:glassIdle 6s ease-in-out infinite; }
+  /* the orb: clear glass with a soft highlight */
+  :root[data-theme="glass"] #core .heart { position:relative; width:calc(var(--core) * .58); height:calc(var(--core) * .58); animation:none;
+    background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), rgba(255,255,255,.10) 34%, rgba(255,255,255,.04) 60%, rgba(255,255,255,.10) 100%);
+    border:1px solid rgba(255,255,255,.22); box-shadow:inset 0 -14px 26px rgba(var(--glow),.28), inset 0 1px 0 rgba(255,255,255,.4), 0 12px 34px rgba(0,0,0,.35);
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); transition:box-shadow .4s; }
+  :root[data-theme="glass"] #core .heart span { display:none; }
+  :root[data-theme="glass"] body[data-state="listening"] #core::before { opacity:1; animation:glassListen 1.3s ease-in-out infinite; }
+  :root[data-theme="glass"] body[data-state="listening"] #core .heart { box-shadow:inset 0 -18px 34px rgba(var(--glow),.6), inset 0 1px 0 rgba(255,255,255,.5), 0 12px 34px rgba(0,0,0,.35); }
+  :root[data-theme="glass"] body[data-state="speaking"] #core::before { opacity:.95; animation:glassSpeak .8s ease-in-out infinite; }
+  :root[data-theme="glass"] body[data-state="saving"] #core::before { opacity:.85; animation:glassSave 1.5s linear infinite; }
+  :root[data-theme="glass"] body[data-zone] { --hot:rgb(var(--glow)); }
+
+  :root[data-theme="glass"] .card { border-radius:24px; clip-path:none; padding:18px; background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.11); box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.28); -webkit-backdrop-filter:blur(22px) saturate(140%); backdrop-filter:blur(22px) saturate(140%); }
+  :root[data-theme="glass"] .card::before, :root[data-theme="glass"] .card::after { display:none; }
+  :root[data-theme="glass"] h2, :root[data-theme="glass"] summary, :root[data-theme="glass"] label { text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; color:var(--dim); }
+  :root[data-theme="glass"] label.check { font-size:15px; color:var(--ink); }
+  :root[data-theme="glass"] h2::before, :root[data-theme="glass"] summary::before { content:""; }
+  :root[data-theme="glass"] details summary::after { color:var(--dim); }
+  :root[data-theme="glass"] #say { color:var(--ink); text-shadow:none; font-weight:600; letter-spacing:-.015em; line-height:1.28; }
+  :root[data-theme="glass"] button { clip-path:none; border-radius:999px; text-transform:none; letter-spacing:0; font-size:15px; font-weight:600; color:var(--ink); background:rgba(255,255,255,.055); border:1px solid rgba(255,255,255,.11); box-shadow:inset 0 1px 0 rgba(255,255,255,.14), 0 10px 30px rgba(0,0,0,.28); -webkit-backdrop-filter:blur(22px) saturate(140%); backdrop-filter:blur(22px) saturate(140%); }
+  :root[data-theme="glass"] button:hover { background:rgba(255,255,255,.09); }
+  :root[data-theme="glass"] button.primary { background:rgba(255,255,255,.92); color:#0b0c10; border-color:transparent; box-shadow:0 8px 26px rgba(var(--glow),.28); }
+  :root[data-theme="glass"] button.listening { background:rgb(var(--glow)); color:#0b0c10; box-shadow:0 0 30px rgba(var(--glow),.55); }
+  :root[data-theme="glass"] #music button.on { background:rgba(255,255,255,.92); color:#0b0c10; }
+  :root[data-theme="glass"] input[type=text], :root[data-theme="glass"] input[type=password], :root[data-theme="glass"] select { border-radius:14px; border:1px solid rgba(255,255,255,.10); background:rgba(0,0,0,.28); }
+  :root[data-theme="glass"] input[type=checkbox] { accent-color:rgb(var(--glow)); }
+  :root[data-theme="glass"] li { border-top:1px solid rgba(255,255,255,.07); }
+  :root[data-theme="glass"] ol li::before { color:var(--dim); }
+  :root[data-theme="glass"] ul li::before { background:rgb(var(--glow)); box-shadow:none; height:5px; width:5px; border-radius:50%; top:15px; }
+  :root[data-theme="glass"] #dayline .track { height:6px; border:0; background:rgba(255,255,255,.09); }
+  :root[data-theme="glass"] #dayline .past { background:linear-gradient(90deg, rgba(var(--glow2),.8), rgba(var(--glow),.9)); border-radius:6px; }
+  :root[data-theme="glass"] #dayline .ev { top:-3px; height:12px; background:rgba(255,255,255,.75); box-shadow:none; }
+  :root[data-theme="glass"] #dayline .nowdot { width:12px; height:12px; margin:-6px 0 0 -6px; background:#fff; box-shadow:0 0 14px rgba(var(--glow),.95); }
+  :root[data-theme="glass"] #dayline .ends { font-family:var(--body); }
+  :root[data-theme="glass"] #lines code { border-left:0; border-radius:12px; background:rgba(0,0,0,.28); color:var(--ink); }
+  :root[data-theme="glass"] #music { background:var(--backdrop), var(--bg); }
+  :root[data-theme="glass"] #muArt { border:1px solid rgba(255,255,255,.12); border-radius:20px; box-shadow:0 14px 34px rgba(0,0,0,.4); }
+  @keyframes glassIdle { 0%,100% { transform:scale(.94); } 50% { transform:scale(1.05); } }
+  @keyframes glassListen { 0%,100% { transform:scale(1.02); } 50% { transform:scale(1.26); } }
+  @keyframes glassSpeak { 0%,100% { transform:scale(1); } 30% { transform:scale(1.18); } 60% { transform:scale(1.07); } }
+  @keyframes glassSave { 0% { opacity:.5; } 50% { opacity:1; } 100% { opacity:.5; } }
   @keyframes spin { to { transform:rotate(360deg); } }
   @keyframes pulse { 0%,100% { transform:scale(.94); opacity:.86; } 50% { transform:scale(1.04); opacity:1; } }
   @keyframes breathe { 0%,100% { opacity:.45; } 50% { opacity:1; } }
@@ -409,6 +469,7 @@
     <summary>System</summary>
     <label for="theme" style="margin-top:0">Look</label>
     <select id="theme">
+      <option value="glass">Glass (frosted panes, one soft light)</option>
       <option value="sleek">Soft (dark, raised panels, eclipse)</option>
       <option value="spider">Web (red on navy)</option>
       <option value="arc">Arc (cyan and gold)</option>
@@ -417,7 +478,7 @@
       <option value="ultron">Steel (gunmetal and ember)</option>
       <option value="retro">Mainframe (amber terminal)</option>
     </select>
-    <label for="glow">Glow colour (Soft look)</label>
+    <label for="glow">Glow colour</label>
     <select id="glow">
       <option value="240,90,150;255,150,80">Sunset (orange to pink)</option>
       <option value="150,110,255;240,90,150">Dusk (pink to violet)</option>
@@ -570,7 +631,7 @@
   setInterval(drawDay, 60000);
 
   // ---------- look ----------
-  const THEMES = ['sleek', 'spider', 'arc', 'bat', 'matrix', 'ultron', 'retro'];
+  const THEMES = ['glass', 'sleek', 'spider', 'arc', 'bat', 'matrix', 'ultron', 'retro'];
   const root = document.documentElement;
   let rainTimer = 0;
   function rain(on) {
@@ -593,15 +654,15 @@
     }, 70);
   }
   function setTheme(t) {
-    if (!THEMES.includes(t)) t = 'sleek';
+    if (!THEMES.includes(t)) t = 'glass';
     if (root) root.dataset.theme = t;
     $('theme').value = t;
     rain(t === 'matrix');
   }
   const urlTheme = new URLSearchParams(location.search).get('theme');
   // the calm look became the default on 2026-10-02; a look chosen after that is kept
-  if (store.get('lookV') !== '2') { store.set('theme', 'sleek'); store.set('lookV', '2'); }
-  setTheme(urlTheme || store.get('theme', 'sleek'));
+  if (store.get('lookV') !== '3') { store.set('theme', 'glass'); store.set('lookV', '3'); }
+  setTheme(urlTheme || store.get('theme', 'glass'));
   const setGlow = (v) => {
     const [a, b] = String(v).split(';');
     if (!/^\d+,\d+,\d+$/.test(a) || !root || !root.style) return;

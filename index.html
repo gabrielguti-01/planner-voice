@@ -83,7 +83,13 @@
     background: repeating-linear-gradient(to bottom, rgba(255,255,255,var(--scan)) 0 1px, transparent 1px 3px), radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.62)); }
   #rain { position:fixed; inset:0; width:100%; height:100%; z-index:0; opacity:.5; display:none; }
   :root[data-theme="matrix"] #rain { display:block; }
-  main { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:14px 16px calc(28px + env(safe-area-inset-bottom)); }
+  main { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:10px 16px calc(14px + env(safe-area-inset-bottom)); --core:clamp(120px, 25vh, 216px); }
+  #screen { display:flex; flex-direction:column; height:calc(100dvh - 24px - env(safe-area-inset-bottom)); min-height:380px; }
+  #screen > * { flex:0 0 auto; }
+  #screen .primary-panel { flex:1 1 auto; min-height:90px; overflow-y:auto; display:flex; flex-direction:column; }
+  #screen .primary-panel #say { margin:auto 0; }
+  #menu { flex:0 0 auto; }
+  #drawer { padding-top:6px; }
 
   header { display:flex; align-items:center; justify-content:space-between; gap:10px; font:500 11px/1 var(--display); letter-spacing:var(--label-space); text-transform:uppercase; color:var(--dim); padding:6px 2px 4px; }
   header b { color:var(--p); font-weight:700; text-shadow:0 0 12px rgba(var(--p-rgb),.7); }
@@ -91,8 +97,8 @@
   .led { width:7px; height:7px; border-radius:50%; background:var(--hot); box-shadow:0 0 10px var(--hot); animation:breathe 2.4s ease-in-out infinite; }
   #clock { font-family:var(--mono); letter-spacing:.08em; font-size:13px; color:var(--ink); }
 
-  .core-wrap { display:grid; place-items:center; margin:6px 0 2px; }
-  #core { all:unset; cursor:pointer; position:relative; width:216px; height:216px; display:grid; place-items:center; -webkit-tap-highlight-color:transparent; }
+  .core-wrap { display:grid; place-items:center; margin:2px 0 0; }
+  #core { all:unset; cursor:pointer; position:relative; width:var(--core); height:var(--core); display:grid; place-items:center; -webkit-tap-highlight-color:transparent; }
   #core:focus-visible { outline:2px solid var(--a); outline-offset:6px; border-radius:50%; }
   #core svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; filter:drop-shadow(0 0 10px color-mix(in srgb, var(--hot) 70%, transparent)); }
   #core .r { fill:none; stroke:var(--hot); transform-origin:108px 108px; transition:stroke .35s; }
@@ -107,7 +113,7 @@
   #core .r5 { stroke-width:3; stroke-dasharray:118 36 40 36; stroke-linecap:round; animation:spin calc(17s * var(--spin)) linear infinite reverse; }
   #core .r2 { stroke:var(--a); stroke-width:2.2; stroke-dasharray:70 22 18 22; stroke-linecap:round; animation:spin calc(13s * var(--spin)) linear infinite reverse; }
   #core .r4 { stroke-width:4; stroke-dasharray:96 205; stroke-linecap:round; opacity:.95; animation:spin calc(8s * var(--spin)) linear infinite; }
-  #core .heart { width:84px; height:84px; border-radius:50%; position:relative; display:grid; place-items:center;
+  #core .heart { width:calc(var(--core) * .39); height:calc(var(--core) * .39); border-radius:50%; position:relative; display:grid; place-items:center;
     background:radial-gradient(circle at 50% 44%, #fff 0 6%, color-mix(in srgb, var(--hot) 70%, #fff) 14%, var(--hot) 34%, color-mix(in srgb, var(--hot) 55%, #1a0206) 62%, color-mix(in srgb, var(--hot) 22%, transparent) 100%);
     box-shadow:0 0 34px color-mix(in srgb, var(--hot) 75%, transparent), inset 0 0 22px rgba(255,255,255,.35); animation:pulse calc(3.2s * var(--spin)) ease-in-out infinite; }
   #core .heart span { font:700 10px/1 var(--display); letter-spacing:.24em; color:var(--on-p); text-transform:uppercase; }
@@ -117,11 +123,11 @@
   #gauge[data-level="tight"] { color:var(--bad); } #gauge[data-level="critical"] { color:#ff5a5a; }
 
   /* theme-specific shapes */
-  :root[data-theme="ultron"] #core .heart { border-radius:18% 18% 46% 46% / 22% 22% 60% 60%; width:96px; height:70px; }
+  :root[data-theme="ultron"] #core .heart { border-radius:18% 18% 46% 46% / 22% 22% 60% 60%; width:calc(var(--core) * .44); height:calc(var(--core) * .32); }
   :root[data-theme="bat"] header b { font-size:0; text-shadow:none; }
   :root[data-theme="bat"] header b::after { content:"Batcomputer"; font-size:11px; text-shadow:0 0 12px rgba(var(--p-rgb),.7); }
-  :root[data-theme="bat"] #core { height:190px; }
-  :root[data-theme="bat"] #core svg { top:-13px; filter:drop-shadow(0 0 16px color-mix(in srgb, var(--hot) 55%, transparent)); }
+  :root[data-theme="bat"] #core { height:calc(var(--core) * .7); }
+  :root[data-theme="bat"] #core svg { top:calc(var(--core) * -.15); filter:drop-shadow(0 0 16px color-mix(in srgb, var(--hot) 55%, transparent)); }
   :root[data-theme="bat"] #core .heart { background:none; box-shadow:none; animation:none; }
   :root[data-theme="bat"] #core .heart span { display:none; }
   :root[data-theme="bat"] #core .r2 { display:none; }
@@ -132,7 +138,6 @@
   :root[data-theme="bat"] .primary-panel { border-color:rgba(var(--p-rgb),.55); border-top:3px solid var(--p); }
   :root[data-theme="bat"] #say { text-shadow:none; font-family:var(--display); font-weight:500; font-size:25px; letter-spacing:.01em; }
   :root[data-theme="bat"] button { font-size:14px; }
-  :root[data-theme="bat"] main { padding-bottom:calc(150px + env(safe-area-inset-bottom)); }
   :root[data-theme="retro"] #core { width:auto; height:auto; padding:10px 0 4px; }
   :root[data-theme="retro"] #core svg { display:none; }
   :root[data-theme="retro"] #core .heart { width:auto; height:auto; border-radius:0; background:none; box-shadow:none; animation:none; border:2px solid var(--p); padding:10px 22px; }
@@ -146,7 +151,7 @@
   :root[data-theme="retro"] #say::after { content:"█"; animation:blink 1s steps(1) infinite; margin-left:4px; }
   :root[data-theme="matrix"] #say { text-shadow:0 0 12px rgba(var(--p-rgb),.7); }
 
-  .card { position:relative; margin:12px 0; padding:16px 16px 15px; background:var(--panel); border:1px solid rgba(var(--p-rgb),.32); backdrop-filter:blur(6px);
+  .card { position:relative; margin:10px 0; padding:16px 16px 15px; background:var(--panel); border:1px solid rgba(var(--p-rgb),.32); backdrop-filter:blur(6px);
     clip-path:polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); box-shadow:inset 0 0 26px rgba(var(--p-rgb),.06); }
   .card::before, .card::after { content:""; position:absolute; width:22px; height:22px; pointer-events:none; }
   .card::before { top:6px; right:6px; border-top:2px solid var(--p); border-right:2px solid var(--p); opacity:.9; }
@@ -187,7 +192,7 @@
   #pending h2 { color:var(--a); }
   #lines code { display:block; font:400 15px/1.4 var(--mono); color:var(--a); background:rgba(var(--a-rgb),.07); border-left:2px solid var(--a); padding:9px 11px; margin:7px 0; white-space:pre-wrap; word-break:break-word; }
   #attentionCard { border-color:rgba(255,179,71,.6); } #attentionCard h2 { color:var(--bad); }
-  #status { text-align:center; min-height:20px; margin:14px 0 0; }
+  #status { text-align:center; min-height:18px; margin:6px 0 0; }
   .warn { color:var(--a); } .bad { color:var(--bad); }
   .hidden { display:none; }
   p.meta { margin:10px 0 0; }
@@ -205,6 +210,7 @@
 <body data-state="idle">
 <canvas id="rain" aria-hidden="true"></canvas>
 <main>
+ <div id="screen">
   <header>
     <span><b>To-Do</b> · v1</span>
     <span class="capsule"><i class="led"></i><span id="mode">ONLINE</span></span>
@@ -247,6 +253,7 @@
   <div class="row">
     <button id="talk" class="primary">Tap and talk</button>
     <button id="speak">Read it to me</button>
+    <button id="menu" aria-controls="drawer">More</button>
   </div>
 
   <section class="card hidden" id="pending">
@@ -259,6 +266,10 @@
     </div>
   </section>
 
+  <p class="meta" id="status"></p>
+ </div>
+
+ <div id="drawer" class="hidden">
   <section class="card">
     <label for="typed" style="margin-top:0">Manual input</label>
     <div class="row">
@@ -292,7 +303,7 @@
     <label class="check"><input type="checkbox" id="autospeak" checked> Read the next step aloud after saving</label>
     <div class="row" style="margin-top:14px"><button id="saveSettings">Save settings</button></div>
   </details>
-  <p class="meta" id="status"></p>
+ </div>
 </main>
 
 <script src="speech.js"></script>
@@ -307,6 +318,15 @@
   const setState = (s) => { if (document.body) document.body.dataset.state = s; $('mode').textContent = MODES[s]; };
   const tickClock = () => { const d = new Date(); $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   tickClock(); setInterval(tickClock, 15000);
+
+  // ---------- everything except the next step lives in a drawer ----------
+  const drawer = (on) => {
+    $('drawer').classList.toggle('hidden', !on);
+    $('menu').textContent = on ? 'Close' : 'More';
+    if (on && $('drawer').scrollIntoView) setTimeout(() => $('drawer').scrollIntoView({ behavior: 'smooth' }), 50);
+    else if (!on && window.scrollTo) window.scrollTo(0, 0);
+  };
+  $('menu').onclick = () => drawer($('drawer').classList.contains('hidden'));
 
   // ---------- look ----------
   const THEMES = ['spider', 'arc', 'bat', 'matrix', 'ultron', 'retro'];
@@ -349,7 +369,7 @@
   $('saveSettings').onclick = () => {
     store.set('repo', $('repo').value.trim()); store.set('token', $('token').value.trim());
     store.set('autosend', $('autosend').checked ? '1' : '0'); store.set('autospeak', $('autospeak').checked ? '1' : '0');
-    $('settings').open = false; refresh();
+    $('settings').open = false; drawer(false); refresh();
   };
   const status = (t, cls = '') => { $('status').textContent = t; $('status').className = 'meta ' + cls; };
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -403,7 +423,7 @@
     $('attentionCard').classList.toggle('hidden', !next.attention.length);
   }
   async function refresh(speakIfNew = false) {
-    if (!MOCK && !store.get('token')) { $('say').textContent = 'Open Settings below and add your GitHub token to connect.'; $('meta').textContent = 'not connected'; $('settings').open = true; return; }
+    if (!MOCK && !store.get('token')) { $('say').textContent = 'Open Settings below and add your GitHub token to connect.'; $('meta').textContent = 'not connected'; $('settings').open = true; drawer(true); return; }
     try {
       const before = next?.made;
       next = parseNext(await getNext());
@@ -441,8 +461,8 @@
   const localNow = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
   function act(action, minutes) {
     if (action === 'free') { const a = PlannerSpeech.freeAnswer(next.pressure, MOCK ? '2026-10-01 15:00' : localNow(), minutes ?? null); status(a); speak(a); return; }
-    if (action === 'list') { $('todayBox').open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
-    else if (action === 'week') { $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }
+    if (action === 'list') { drawer(true); $('todayBox').open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
+    else if (action === 'week') { drawer(true); $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }
     else refresh().then(() => speak(next?.say));
   }
   async function send() {

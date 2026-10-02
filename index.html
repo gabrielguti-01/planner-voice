@@ -211,6 +211,36 @@
   #status { text-align:center; min-height:18px; margin:6px 0 0; }
   .warn { color:var(--a); } .bad { color:var(--bad); }
   .hidden { display:none; }
+
+  /* ---------- music: a small button, and a sheet that opens over the screen ---------- */
+  .hdr-right { display:inline-flex; align-items:center; gap:10px; }
+  #musicBtn { flex:0 0 auto; min-height:0; width:34px; height:34px; padding:0; border-radius:50%; font-size:16px; letter-spacing:0; line-height:1; position:relative; }
+  #musicBtn.playing::after { content:""; position:absolute; top:3px; right:3px; width:7px; height:7px; border-radius:50%; background:var(--hot); box-shadow:0 0 8px var(--hot); }
+  #music { position:fixed; inset:0; z-index:20; overflow-y:auto; background:var(--bg); padding:14px 16px calc(24px + env(safe-area-inset-bottom)); }
+  #music .mu-in { max-width:560px; margin:0 auto; }
+  #music .mu-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  #music .mu-top b { font:600 15px/1 var(--display); letter-spacing:var(--label-space); }
+  #music .mu-top button, #music .mu-small { flex:0 0 auto; min-height:38px; padding:9px 14px; font-size:12px; }
+  #muArt { width:120px; height:120px; margin:6px auto 12px; border-radius:16px; background:rgba(var(--p-rgb),.10) center/cover no-repeat; border:1px solid rgba(var(--p-rgb),.28); }
+  #muTitle { text-align:center; font:600 19px/1.25 var(--body); }
+  #muArtist { text-align:center; color:var(--dim); font-size:15px; margin-top:2px; }
+  #music input[type=range] { width:100%; accent-color:var(--p); margin:0; }
+  .mu-time { display:flex; justify-content:space-between; font:400 12px/1 var(--mono); color:var(--dim); margin:4px 0 12px; }
+  .mu-ctl { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; }
+  .mu-ctl2 { display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:10px; }
+  #music button.on { color:var(--on-p); background:var(--p); }
+  .mu-row { display:flex; align-items:center; gap:12px; width:100%; text-align:left; text-transform:none; letter-spacing:0; padding:8px 10px; min-height:56px; margin:8px 0; font:500 15px/1.25 var(--body); color:var(--ink); }
+  .mu-row span { min-width:0; display:flex; flex-direction:column; }
+  .mu-row b, .mu-row small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mu-row b { font-weight:600; } .mu-row small { color:var(--dim); font-size:13px; }
+  .mu-pic { flex:0 0 40px; height:40px; border-radius:8px; background:rgba(var(--p-rgb),.14) center/cover no-repeat; }
+  .mu-pic.round { border-radius:50%; }
+  #muRecentQ { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .mu-chip { flex:0 0 auto; min-height:0; padding:8px 12px; font:500 13px/1 var(--body); text-transform:none; letter-spacing:0; border-radius:999px; clip-path:none; }
+  #music h2 { margin:16px 0 4px; }
+  :root[data-theme="sleek"] #muArt { border:0; box-shadow:7px 7px 16px #17181b, -7px -7px 16px #33353b; }
+  :root[data-theme="sleek"] #music button.on { background:var(--grad); color:#fff; }
+  :root[data-theme="sleek"] .mu-top b { letter-spacing:0; }
   p.meta { margin:10px 0 0; }
 
 
@@ -299,7 +329,7 @@
   <header>
     <span><b>To-Do</b> · v1</span>
     <span class="capsule"><i class="led"></i><span id="mode">ONLINE</span></span>
-    <span id="clock">--:--</span>
+    <span class="hdr-right"><button id="musicBtn" aria-label="Music">&#9835;</button><span id="clock">--:--</span></span>
   </header>
 
   <div class="core-wrap">
@@ -418,6 +448,48 @@
  </div>
 </main>
 
+<section id="music" class="hidden" aria-label="Music">
+ <div class="mu-in">
+  <div class="mu-top"><b>Music</b><button id="muClose">Close</button></div>
+
+  <div id="muConnect" class="card">
+    <h2>Spotify</h2>
+    <p class="meta" style="margin:0 0 12px">Connect once to control the Spotify that is playing on your phone or computer from here. Needs Spotify Premium. The login stays in this browser.</p>
+    <div class="row"><button id="muLogin" class="primary">Connect Spotify</button></div>
+  </div>
+
+  <div id="muBody" class="hidden">
+    <div class="card">
+      <div id="muArt"></div>
+      <div id="muTitle">Nothing playing</div>
+      <div id="muArtist"></div>
+      <input id="muSeek" type="range" min="0" max="0" value="0" aria-label="Position" style="margin-top:14px">
+      <div class="mu-time"><span id="muNow">0:00</span><span id="muDur">0:00</span></div>
+      <div class="mu-ctl"><button id="muPrev">Back</button><button id="muPlay" class="primary">Play</button><button id="muNext">Next</button></div>
+      <div class="mu-ctl2"><button id="muShuffle" class="mu-small">Shuffle</button><button id="muRepeat" class="mu-small">Repeat</button></div>
+      <div id="muVolRow" class="hidden"><label for="muVol">Volume</label><input id="muVol" type="range" min="0" max="100" value="50"></div>
+      <label for="muDevice">Device</label>
+      <select id="muDevice"></select>
+    </div>
+
+    <div class="card">
+      <label for="muQ" style="margin-top:0">Search songs, artists, albums, playlists</label>
+      <div class="row"><input id="muQ" type="text" placeholder="Song, artist, album or playlist" autocomplete="off"><button id="muGo" style="flex:0 0 auto">Search</button></div>
+      <div id="muRecentQ"></div>
+      <div id="muResults"></div>
+    </div>
+
+    <div class="card">
+      <div class="row"><button id="muTabLists" class="mu-small">My playlists</button><button id="muTabRecent" class="mu-small">Recently played</button></div>
+      <div id="muList"></div>
+    </div>
+
+    <div class="row" style="margin-top:14px"><button id="muOut" class="mu-small">Disconnect Spotify</button></div>
+  </div>
+  <p class="meta" id="muStatus" style="text-align:center;margin-top:12px"></p>
+ </div>
+</section>
+
 <script src="speech.js"></script>
 <script>
 (() => {
@@ -427,7 +499,7 @@
   const store = { get: (k, d = '') => { try { return localStorage.getItem('planner.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('planner.' + k, v); } catch {} } };
   let next = null, pendingLines = [], lastSpoken = '';
   const MODES = { idle: 'ONLINE', listening: 'LISTENING', speaking: 'SPEAKING', saving: 'SYNCING' };
-  const setState = (s) => { if (document.body) document.body.dataset.state = s; $('mode').textContent = MODES[s]; };
+  const setState = (s) => { if (document.body) document.body.dataset.state = s; $('mode').textContent = MODES[s]; window.PlannerMusic?.onState(s); };
   const tickClock = () => { const d = new Date(); $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   tickClock(); setInterval(tickClock, 15000);
 
@@ -763,5 +835,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
+<script src="music.js"></script>
 </body>
 </html>

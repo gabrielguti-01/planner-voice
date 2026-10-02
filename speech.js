@@ -75,6 +75,7 @@
       let m;
 
       if (/^(?:what'?s|what is|whats) next|^next up|^what (?:now|should i do)|^check the repo/.test(low)) { out.action = out.action || 'next'; continue; }
+      if (/^re-?check|^check (?:it |that |this )?again|^re-?prioriti[sz]e|^re-?calculate|^is (?:this|that|it) still (?:the )?(?:best|right|most)/.test(low)) { out.action = 'recheck'; continue; }
       if (/^what'?s left|^day list|^what(?:'s| is) (?:still )?(?:open|remaining)/.test(low)) { out.action = 'list'; continue; }
       if (/^week ahead|^what'?s coming up|^what(?:'s| is) (?:this|the) week/.test(low)) { out.action = 'week'; continue; }
       if (/^(?:can|should|could|may) i (?:go|hang|leave|take|join|head)|\bdo i have time\b|\bam i free\b|\bbeen invited\b|^how (?:much )?(?:free )?time do i have|^how(?:'s| is) (?:my )?pressure|^is it ok(?:ay)? (?:if i|to) (?:go|hang)/.test(low)) {

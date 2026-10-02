@@ -291,7 +291,7 @@
  </div>
 
  <div id="drawer" class="hidden">
-  <div class="row" style="margin-top:6px"><button id="checkin">Check in: start my day line now</button></div>
+  <div class="row" style="margin-top:6px"><button id="recheck">Recheck the order</button><button id="checkin">Check in</button></div>
   <section class="card">
     <label for="typed" style="margin-top:0">Manual input</label>
     <div class="row">
@@ -322,6 +322,7 @@
     <label for="rate">Speaking speed</label>
     <select id="rate"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select>
     <div class="row" style="margin-top:10px"><button id="voiceTest">Test voice</button></div>
+    <label class="check"><input type="checkbox" id="showList"> Show the full ordered list under More</label>
     <label class="check"><input type="checkbox" id="pair"> Give me two small steps at a time (experiment)</label>
     <label for="repo">Repository (owner/name)</label>
     <input id="repo" type="text" value="" placeholder="owner/repository" autocomplete="off">
@@ -443,6 +444,8 @@
   $('token').value = store.get('token');
   $('autosend').checked = store.get('autosend') === '1';
   $('autospeak').checked = store.get('autospeak', '1') === '1';
+  $('showList').checked = store.get('showList') === '1';
+  $('showList').onchange = () => { store.set('showList', $('showList').checked ? '1' : '0'); render(); };
   $('pair').checked = store.get('pair') === '1';
   $('pair').onchange = () => { store.set('pair', $('pair').checked ? '1' : '0'); render(); };
   $('rate').value = store.get('rate', '1');
@@ -504,6 +507,7 @@
     const fill = (id, arr, empty) => { $(id).innerHTML = ''; for (const t of (arr.length ? arr : [empty])) { const li = document.createElement('li'); li.textContent = t; $(id).appendChild(li); } };
     fill('after', next.after, 'Nothing queued.');
     $('afterBox').open = false; // one thing at a time: the rest stays folded until asked for
+    $('afterBox').classList.toggle('hidden', !$('showList').checked); // and the full order is hidden unless switched on
     fill('today', next.today, 'All done.');
     fill('week', next.week, 'Nothing dated.');
     fill('attention', next.attention, '');
@@ -573,7 +577,31 @@
     if ($('autosend').checked && !r.uncertain) send();
   }
   const localNow = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+  // Recheck: asks the engine to recompute now. It records nothing and does not move the scheduled recheck.
+  async function recheck() {
+    drawer(false);
+    if (MOCK) { status('Rechecked (demo). The order is unchanged.'); speak(next?.say); return; }
+    const made = next?.made;
+    setState('saving'); status('Rechecking…');
+    try {
+      await appendInbox(['recheck: now']);
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 10000));
+        const fresh = parseNext(await getNext());
+        if (fresh.made !== made) {
+          const changed = fresh.say.replace(/^(Rechecked|Saved)\. /, '') !== (next?.say || '').replace(/^(Rechecked|Saved)\. /, '');
+          next = fresh; render(); setState('idle');
+          status(changed ? 'Rechecked: the next step changed.' : 'Rechecked: this is still the best next step.');
+          if ($('autospeak').checked) speak(changed ? next.say : 'Still the best next step.');
+          return;
+        }
+      }
+      setState('idle'); status('Recheck sent. It will show on the next run.', 'warn');
+    } catch (e) { setState('idle'); status('Recheck failed: ' + e.message, 'bad'); }
+  }
+  $('recheck').onclick = recheck;
   function act(action, minutes) {
+    if (action === 'recheck') return recheck();
     if (action === 'free') { const a = PlannerSpeech.freeAnswer(next.pressure, MOCK ? '2026-10-01 15:00' : localNow(), minutes ?? null); status(a); speak(a); return; }
     if (action === 'list') { drawer(true); $('todayBox').open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
     else if (action === 'week') { drawer(true); $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }

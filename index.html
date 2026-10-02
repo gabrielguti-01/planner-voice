@@ -83,8 +83,8 @@
     background: repeating-linear-gradient(to bottom, rgba(255,255,255,var(--scan)) 0 1px, transparent 1px 3px), radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.62)); }
   #rain { position:fixed; inset:0; width:100%; height:100%; z-index:0; opacity:.5; display:none; }
   :root[data-theme="matrix"] #rain { display:block; }
-  main { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:10px 16px calc(14px + env(safe-area-inset-bottom)); --core:clamp(96px, 20vh, 180px); }
-  #screen { display:flex; flex-direction:column; height:calc(100dvh - 24px - env(safe-area-inset-bottom)); min-height:380px; }
+  main { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:calc(10px + env(safe-area-inset-top)) 16px calc(14px + env(safe-area-inset-bottom)); --core:clamp(96px, 20vh, 180px); }
+  #screen { display:flex; flex-direction:column; height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height:380px; }
   #screen > * { flex:0 0 auto; }
   #screen .primary-panel { flex:1 1 auto; min-height:90px; overflow-y:auto; display:flex; flex-direction:column; }
   #screen .primary-panel #say { margin:auto 0; }
@@ -214,9 +214,9 @@
 
   /* ---------- music: a small button, and a sheet that opens over the screen ---------- */
   .hdr-right { display:inline-flex; align-items:center; gap:10px; }
-  #musicBtn { flex:0 0 auto; min-height:0; width:34px; height:34px; padding:0; border-radius:50%; font-size:16px; letter-spacing:0; line-height:1; position:relative; }
+  #musicBtn { flex:0 0 auto; min-height:0; width:44px; height:44px; padding:0; border-radius:50%; font-size:19px; letter-spacing:0; line-height:1; position:relative; }
   #musicBtn.playing::after { content:""; position:absolute; top:3px; right:3px; width:7px; height:7px; border-radius:50%; background:var(--hot); box-shadow:0 0 8px var(--hot); }
-  #music { position:fixed; inset:0; z-index:20; overflow-y:auto; background:var(--bg); padding:14px 16px calc(24px + env(safe-area-inset-bottom)); }
+  #music { position:fixed; inset:0; z-index:20; overflow-y:auto; background:var(--bg); padding:calc(14px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); }
   #music .mu-in { max-width:560px; margin:0 auto; }
   #music .mu-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
   #music .mu-top b { font:600 15px/1 var(--display); letter-spacing:var(--label-space); }

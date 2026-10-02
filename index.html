@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" data-theme="spider">
+<html lang="en" data-theme="sleek">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#060914">
+<meta name="theme-color" content="#000000">
 <meta name="robots" content="noindex">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -213,6 +213,60 @@
   .hidden { display:none; }
   p.meta { margin:10px 0 0; }
 
+
+  /* ---------- Sleek: plain black, one soft light that reacts when you talk to it ---------- */
+  :root { --glow:120,170,255; }
+  :root[data-theme="sleek"] {
+    --bg:#000; --panel:#0c0c0e; --ink:#f5f5f7; --dim:#7c7c85;
+    --p:rgb(var(--glow)); --p-rgb:var(--glow); --a:#f5f5f7; --a-rgb:245,245,247; --on-p:#000; --listen:rgb(var(--glow)); --web:none; --rings:none;
+    --display:system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif; --body:system-ui,-apple-system,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    --label-space:0; --say-size:27px; --cut:0px; --btn-cut:0px; --scan:0; --backdrop:none;
+  }
+  :root[data-theme="sleek"] body::before { display:none; }
+  :root[data-theme="sleek"] header { text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; }
+  :root[data-theme="sleek"] header b { color:var(--ink); text-shadow:none; font-weight:600; }
+  :root[data-theme="sleek"] .capsule { border:0; background:none; padding:0; color:var(--dim); }
+  :root[data-theme="sleek"] .led { width:6px; height:6px; background:rgb(var(--glow)); box-shadow:0 0 8px rgb(var(--glow)); }
+  :root[data-theme="sleek"] #clock { font-family:var(--body); letter-spacing:0; color:var(--dim); }
+  :root[data-theme="sleek"] #core svg { display:none; }
+  :root[data-theme="sleek"] #core::before { content:""; position:absolute; inset:-35%; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle, rgba(var(--glow),.30), rgba(var(--glow),.08) 45%, transparent 68%); filter:blur(14px); opacity:.55; transition:opacity .5s, transform .5s; animation:sleekHalo 6s ease-in-out infinite; }
+  :root[data-theme="sleek"] #core .heart { width:calc(var(--core) * .44); height:calc(var(--core) * .44);
+    background:radial-gradient(circle at 50% 38%, #fff 0 8%, rgb(var(--glow)) 46%, rgba(var(--glow),.45) 100%);
+    box-shadow:0 0 calc(var(--core) * .28) rgba(var(--glow),.55), inset 0 0 18px rgba(255,255,255,.35); animation:sleekIdle 5s ease-in-out infinite; }
+  :root[data-theme="sleek"] #core .heart span { display:none; }
+  :root[data-theme="sleek"] body[data-state="listening"] #core::before { opacity:1; animation:sleekListen 1.2s ease-in-out infinite; }
+  :root[data-theme="sleek"] body[data-state="listening"] #core .heart { animation:sleekListen 1.2s ease-in-out infinite; }
+  :root[data-theme="sleek"] body[data-state="speaking"] #core::before { opacity:.9; animation:sleekSpeak .75s ease-in-out infinite; }
+  :root[data-theme="sleek"] body[data-state="speaking"] #core .heart { animation:sleekSpeak .75s ease-in-out infinite; }
+  :root[data-theme="sleek"] body[data-state="saving"] #core::before { opacity:.8; animation:sleekSave 1.4s linear infinite; }
+  :root[data-theme="sleek"] body[data-state="saving"] #core .heart { animation:sleekSave 1.4s linear infinite; }
+  :root[data-theme="sleek"] body[data-zone] { --hot:rgb(var(--glow)); }
+  :root[data-theme="sleek"] .card { border:0; border-radius:20px; clip-path:none; background:var(--panel); box-shadow:none; backdrop-filter:none; padding:18px; }
+  :root[data-theme="sleek"] .card::before, :root[data-theme="sleek"] .card::after { display:none; }
+  :root[data-theme="sleek"] #screen .primary-panel { background:none; padding:6px 4px; }
+  :root[data-theme="sleek"] h2, :root[data-theme="sleek"] summary, :root[data-theme="sleek"] label { text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; color:var(--dim); }
+  :root[data-theme="sleek"] h2::before, :root[data-theme="sleek"] summary::before { content:""; }
+  :root[data-theme="sleek"] details summary::after { color:var(--dim); }
+  :root[data-theme="sleek"] #say { color:var(--ink); text-shadow:none; font-weight:600; letter-spacing:-.01em; line-height:1.25; }
+  :root[data-theme="sleek"] button { clip-path:none; border-radius:999px; text-transform:none; letter-spacing:0; font-size:15px; font-weight:600; border-color:#26262b; background:#111114; color:var(--ink); }
+  :root[data-theme="sleek"] button.primary { background:#f5f5f7; color:#000; box-shadow:none; }
+  :root[data-theme="sleek"] button.listening { background:rgb(var(--glow)); color:#000; box-shadow:0 0 28px rgba(var(--glow),.5); }
+  :root[data-theme="sleek"] input[type=text], :root[data-theme="sleek"] input[type=password], :root[data-theme="sleek"] select { border-radius:12px; border-color:#26262b; background:#111114; }
+  :root[data-theme="sleek"] li { border-top:1px solid #1a1a1e; }
+  :root[data-theme="sleek"] ol li::before { color:var(--dim); }
+  :root[data-theme="sleek"] ul li::before { background:var(--dim); box-shadow:none; }
+  :root[data-theme="sleek"] #dayline .track { height:6px; border:0; background:#1a1a1e; }
+  :root[data-theme="sleek"] #dayline .past { background:#34343b; }
+  :root[data-theme="sleek"] #dayline .ev { top:-3px; height:12px; background:var(--ink); box-shadow:none; }
+  :root[data-theme="sleek"] #dayline .nowdot { width:12px; height:12px; margin:-6px 0 0 -6px; background:rgb(var(--glow)); box-shadow:0 0 0 3px #000, 0 0 12px rgba(var(--glow),.9); }
+  :root[data-theme="sleek"] #dayline .ends { font-family:var(--body); }
+  :root[data-theme="sleek"] #lines code { border-left:0; border-radius:10px; background:#141418; color:var(--ink); }
+  @keyframes sleekIdle { 0%,100% { transform:scale(.96); opacity:.88; } 50% { transform:scale(1.02); opacity:1; } }
+  @keyframes sleekHalo { 0%,100% { transform:scale(.92); } 50% { transform:scale(1.04); } }
+  @keyframes sleekListen { 0%,100% { transform:scale(1); } 50% { transform:scale(1.16); } }
+  @keyframes sleekSpeak { 0%,100% { transform:scale(.97); } 30% { transform:scale(1.1); } 60% { transform:scale(1.02); } }
+  @keyframes sleekSave { 0% { opacity:.55; transform:scale(.98); } 50% { opacity:1; transform:scale(1.05); } 100% { opacity:.55; transform:scale(.98); } }
   @keyframes spin { to { transform:rotate(360deg); } }
   @keyframes pulse { 0%,100% { transform:scale(.94); opacity:.86; } 50% { transform:scale(1.04); opacity:1; } }
   @keyframes breathe { 0%,100% { opacity:.45; } 50% { opacity:1; } }
@@ -310,12 +364,24 @@
     <summary>System</summary>
     <label for="theme" style="margin-top:0">Look</label>
     <select id="theme">
+      <option value="sleek">Sleek (plain black, one soft light)</option>
       <option value="spider">Web (red on navy)</option>
       <option value="arc">Arc (cyan and gold)</option>
       <option value="bat">Cave (bat signal over the city)</option>
       <option value="matrix">Rain (green code)</option>
       <option value="ultron">Steel (gunmetal and ember)</option>
       <option value="retro">Mainframe (amber terminal)</option>
+    </select>
+    <label for="glow">Glow colour (Sleek look)</label>
+    <select id="glow">
+      <option value="120,170,255">Blue</option>
+      <option value="245,245,247">White</option>
+      <option value="170,130,255">Violet</option>
+      <option value="70,220,200">Teal</option>
+      <option value="90,230,140">Green</option>
+      <option value="255,185,80">Amber</option>
+      <option value="255,115,150">Rose</option>
+      <option value="255,90,80">Red</option>
     </select>
     <label for="voice">Voice</label>
     <select id="voice"></select>
@@ -416,7 +482,7 @@
   setInterval(drawDay, 60000);
 
   // ---------- look ----------
-  const THEMES = ['spider', 'arc', 'bat', 'matrix', 'ultron', 'retro'];
+  const THEMES = ['sleek', 'spider', 'arc', 'bat', 'matrix', 'ultron', 'retro'];
   const root = document.documentElement;
   let rainTimer = 0;
   function rain(on) {
@@ -439,13 +505,19 @@
     }, 70);
   }
   function setTheme(t) {
-    if (!THEMES.includes(t)) t = 'spider';
+    if (!THEMES.includes(t)) t = 'sleek';
     if (root) root.dataset.theme = t;
     $('theme').value = t;
     rain(t === 'matrix');
   }
   const urlTheme = new URLSearchParams(location.search).get('theme');
-  setTheme(urlTheme || store.get('theme', 'spider'));
+  // the calm look became the default on 2026-10-02; a look chosen after that is kept
+  if (store.get('lookV') !== '2') { store.set('theme', 'sleek'); store.set('lookV', '2'); }
+  setTheme(urlTheme || store.get('theme', 'sleek'));
+  const setGlow = (v) => { if (/^\d+,\d+,\d+$/.test(v) && root && root.style) root.style.setProperty('--glow', v); };
+  $('glow').value = store.get('glow', '120,170,255');
+  setGlow($('glow').value);
+  $('glow').onchange = () => { store.set('glow', $('glow').value); setGlow($('glow').value); };
   $('theme').onchange = () => { store.set('theme', $('theme').value); setTheme($('theme').value); };
 
   // ---------- settings ----------

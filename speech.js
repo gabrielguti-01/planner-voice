@@ -88,6 +88,31 @@
     return null;
   }
 
+  // Words speech recognition often gets wrong for this planner, fixed before anything is parsed.
+  const FIXES = [
+    [/\bbaby[ -]?(?:men|mann|maan|band|ben|bman|mean|moon|ma'?am)\b/gi, 'baby man'], [/\bbabyman\b/gi, 'baby man'], [/\b(?:maybe|baby) man'?s\b/gi, "baby man's"],
+    [/\b(?:new|neu|nu|neo)[ -]?tropic(?:al)?\b(?= drink|$)/gi, 'nootropic'], [/\bnootropics? drinks?\b/gi, 'nootropic drink'],
+    [/\b(scoop(?:ed)?|change(?:d)?|clean(?:ed)?|empt(?:y|ied)) (?:the )?(?:letter|liter|litre)(?: box)?\b/gi, '$1 the litter'], [/\bletter box\b/gi, 'litter box'],
+    [/\b(?:cal|calk|calcs|calculus|count) ?(?:three|3|iii)\b/gi, 'calc 3'], [/\b(?:chem|kem|chemistry) (?:two|2|ii)\b/gi, 'chem 2'],
+    [/\bsmooth(?:y|ie|ies| he| e)\b/gi, 'smoothie'], [/\blandry\b/gi, 'laundry'], [/\b(?:drier|dryer's|dyer)\b/gi, 'dryer'], [/\bwashing machine\b/gi, 'washer'],
+    [/\bdeodorants?\b|\bdeodor ant\b/gi, 'deodorant'], [/\bvitamin d3?\b|\bvitamin dee\b/gi, 'vitamin D'], [/\bgallon (?:of )?water\b/gi, 'water bottle'],
+  ];
+  const fix = (t) => FIXES.reduce((x, [re, to]) => x.replace(re, to), t);
+  // A whole sentence that only says the current step is finished ("done", "did it", "ok next"), and its misheard forms.
+  const BARE_DONE = /^(?:(?:ok(?:ay)?|yes|yep|yeah|alright|all right|good|cool)[, ]+)?(?:i'?m |i am |it'?s |that'?s |all |we'?re |i |i'?ve |i have |just )?(?:all )?(?:done(?: done)?|dun|don|dawn|finished(?: it| that)?|did it|did that|done it|complete(?:d)?(?: it)?|got it(?: done)?|that one'?s done|done with (?:it|that|this(?: one)?)|check(?:ed)?(?: (?:it|that)(?: off)?)?|taken care of|took care of (?:it|that)|handled(?: it)?|that'?s it|next(?: one| step| thing)?|move on|moving on)(?:[, ]+(?:next|what'?s next|next one))?$/i;
+  const BARE_SKIP = /^(?:skip(?: (?:it|that|this(?: one)?))?|not (?:now|today)|pass|later)$/i;
+
+  // Does a report cover the whole step on screen? Every part of the step ("X and Y") must share a word with it.
+  const PAST = { fed: 'feed', ate: 'eat', eaten: 'eat', took: 'take', taken: 'take', did: 'do', done: 'do', made: 'make', swept: 'sweep', drank: 'drink', bought: 'buy', went: 'go', gave: 'give', sent: 'send', paid: 'pay', threw: 'throw', put: 'put', wrote: 'write', ran: 'run', had: 'have', brought: 'bring', got: 'get', hung: 'hang', called: 'call', showered: 'shower' };
+  const STOPW = new Set(['the', 'a', 'an', 'my', 'your', 'i', 'to', 'of', 'for', 'and', 'with', 'on', 'in', 'at', 'it', 'is', 'just', 'already', 'today', 'that', 'this', 'up', 'out', 'me', 'have', 'done', 'do', 'if', 'you', 'can', 'outside', 'quick', 'then', 'now', 'some', 'all', 'his', 'her', 'their', 'still', 'there', 'are', 'last', 'night', 'next']);
+  const words = (t) => (t.toLowerCase().match(/[a-z0-9]+/g) || []).map((w) => PAST[w] || (w.length > 4 ? w.replace(/(ing|ed|es|s)$/, '') : w)).filter((w) => !STOPW.has(w));
+  function coversStep(report, stepSay) {
+    if (!stepSay) return false;
+    const r = new Set(words(report));
+    const parts = stepSay.replace(/^(?:Saved\. )?Next: /, '').replace(/[.,]$/, '').split(/\s+and\s+|,\s*/i).map(words).filter((p) => p.length);
+    return parts.length > 0 && parts.every((p) => p.some((w) => r.has(w)));
+  }
+
   const DONE_VERBS = 'turned in|handed in|did|finished|completed|took|fed|brushed|scooped|ate|had|washed|cleaned|called|sent|paid|swept|showered|shaved|mopped|vacuumed|emailed|bought|submitted|uploaded|studied|watered|made|drank|filled|organized|folded|checked|refilled|clipped|put on|picked up|dropped off|talked to';
 
   /**
@@ -95,10 +120,14 @@
    * @param {string} today   YYYY-MM-DD (the user's local date)
    * @returns {{ commands: string[], action: null|'next'|'list'|'week', uncertain: boolean }}
    */
-  function toCommands(said, today) {
+  function toCommands(said, today, ctx = {}) {
     const out = { commands: [], action: null, uncertain: false };
-    let text = said.trim().replace(/\s+/g, ' ').replace(/[.!]+$/, '');
+    let text = fix(said.trim().replace(/\s+/g, ' ').replace(/[.!]+$/, ''));
     if (!text) return out;
+    // "done, what's next" / "fed him what's next": the question at the end is its own request
+    const tail = text.match(/^(.*?\S)[,.]?\s+(?:so |and |ok(?:ay)? |now )?(?:what'?s|what is) next\??$/i);
+    if (tail) { out.action = 'next'; text = tail[1]; }
+    const cur = (ctx.tasks || []).filter(Boolean);
 
     // "wait, pause, I just finished X. what's next?" → handle each sentence
     const parts = text.split(/(?<=[.?!])\s+|\s*;\s*|\s+(?:and then|then)\s+(?=i\b)/i).map((p) => p.trim().replace(/[.?!]+$/, '')).filter(Boolean);
@@ -107,6 +136,10 @@
       if (!s) continue;
       const low = s.toLowerCase();
       let m;
+
+      // "done" on its own: the step on screen is finished (its task IDs come from the screen)
+      if (BARE_DONE.test(s)) { if (cur.length) { out.commands.push(`done: ${cur.join(', ')}`); out.closesCurrent = true; } else out.action = out.action || 'next'; continue; }
+      if (BARE_SKIP.test(s) && cur.length) { out.commands.push(`skip: ${cur.join(', ')}`); out.closesCurrent = true; continue; }
 
       if (/^(?:what'?s|what is|whats) next|^next up|^what (?:now|should i do)|^check the repo|^start (?:my|the) day|^what do i (?:need|have) to do|^where do i start/.test(low)) { out.action = out.action || 'next'; continue; }
       if (/^re-?check|^check (?:it |that |this )?again|^re-?prioriti[sz]e|^re-?calculate|^is (?:this|that|it) still (?:the )?(?:best|right|most)/.test(low)) { out.action = 'recheck'; continue; }
@@ -192,6 +225,8 @@
       out.commands.push(`note: ${s}`);
       out.uncertain = true;
     }
+    // a report that covers the whole step on screen closes it: the screen can move on at once
+    if (!out.closesCurrent && ctx.step && out.commands.length && out.commands.every((c) => /^done:/.test(c))) out.closesCurrent = coversStep(out.commands.map((c) => c.slice(5)).join(' and '), ctx.step);
     return out;
   }
 
@@ -204,15 +239,19 @@
     };
     const field = (k) => (text.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '';
     const clean = (s) => s.replace(/\s*\([A-Z0-9][A-Z0-9@#., -]+\)\s*$/g, '').replace(/[`*_]/g, '').trim();
-    const after = section('After that').split('\n').filter((l) => /^\d+\./.test(l)).map((l) => clean(l.replace(/^\d+\.\s*/, '').split(' — ')[0]));
+    const afterLines = section('After that').split('\n').filter((l) => /^\d+\./.test(l));
+    const after = afterLines.map((l) => clean(l.replace(/^\d+\.\s*/, '').split(' — ')[0]));
+    const afterIds = afterLines.map((l) => ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-'));
     const bullets = (name) => section(name).split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2)));
     return {
       plan: section("Today's plan").split('**Not today:**')[0].split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
-      say: section('Say this'), after, today: bullets('Still open today'), week: bullets('Coming up'),
+      say: section('Say this'), after, afterIds, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), late: bullets('Late or waiting'), groceries: bullets('Groceries'),
       then: ((section('Now').match(/^- Then: (.*)$/m) || [])[1] || '').trim(),
+      step: ((section('Now').match(/^- Do: (.*)$/m) || [])[1] || '').trim(),
+      tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       day: { zone: field('zone'), windDown: field('wind_down'), bed: field('bed'), events: section('Day').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim()) }, saved: bullets('Last saved'),
       pressure: { level: field('level'), freeUntil: field('free_until'), slackH: field('slack_h'), nextAnchor: field('next_anchor'), lines: bullets('Pressure') },
     };

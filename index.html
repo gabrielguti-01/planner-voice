@@ -754,7 +754,9 @@
   const { toCommands, parseNext } = PlannerSpeech;
   const MOCK = new URLSearchParams(location.search).has('mock');
   const store = { get: (k, d = '') => { try { return localStorage.getItem('planner.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('planner.' + k, v); } catch {} } };
-  let next = null, pendingLines = [], lastSpoken = '';
+  let next = null, pendingLines = [], lastSpoken = '', lastHandled = null;
+  const closedIds = new Set(); let sendSeq = 0; // steps closed here that the planner hasn't caught up with yet
+  const stale = (fresh) => (fresh.tasks || []).some((id) => closedIds.has(id));
   const MODES = { idle: 'ONLINE', listening: 'LISTENING', speaking: 'SPEAKING', saving: 'SYNCING' };
   const setState = (s) => { if (document.body) document.body.dataset.state = s; $('mode').textContent = MODES[s]; window.PlannerMusic?.onState(s); };
   const tickClock = () => { const d = new Date(); $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -989,7 +991,7 @@
   const b64decode = (s) => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g, '')), (c) => c.charCodeAt(0)));
   const b64encode = (s) => { let bin = ''; for (const b of new TextEncoder().encode(s)) bin += String.fromCharCode(b); return btoa(bin); };
 
-  const MOCK_NEXT = '# Next step\n\nmade:: 2026-10-01 13:24\nvalid_until:: 2026-10-01 15:39\ntired:: off\n\n## Say this\n\nNext: Water the plants. Talk topic: the weekend plan.\n\n## After that\n\n1. Do the dishes — unwashed dishes come first (DISHES@2026-09-30)\n2. Eat your first real meal, outside if you can — first meal (MEAL-FIRST@2026-10-01)\n\n## Still open today\n\n- Morning teeth (TEETH-AM@2026-10-01)\n- Dinner (DINNER@2026-10-01)\n\n## Coming up (7 days)\n\n- Fri 10-02: Dentist\n\n## Pressure\n\nlevel:: steady\nfree_until:: 2026-10-01 21:45\nslack_h:: 6.7\nnext_anchor:: 2026-10-01 19:00\n\n- Verdict: You are free until about 9:45 PM. After that, the report has to start for everything due to still fit.\n- You must be present for: the evening feeding at 7 PM.\n\n## Day\n\nzone:: open\n\n- 10:00-11:15 Chemistry class\n- 19:00-20:30 Muay Thai\n\n## Needs your attention\n\n_Nothing._\n\n## Last saved\n\n_No new reports in this run._\n';
+  const MOCK_NEXT = '# Next step\n\nmade:: 2026-10-01 13:24\nvalid_until:: 2026-10-01 15:39\ntired:: off\n\n## Say this\n\nNext: Water the plants. Talk topic: the weekend plan.\n\n## Now\n\n- Do: Water the plants\n- Tasks: WATER-PLANTS@2026-10-01\n\n## After that\n\n1. Do the dishes — unwashed dishes come first (DISHES@2026-09-30)\n2. Eat your first real meal, outside if you can — first meal (MEAL-FIRST@2026-10-01)\n\n## Still open today\n\n- Morning teeth (TEETH-AM@2026-10-01)\n- Dinner (DINNER@2026-10-01)\n\n## Coming up (7 days)\n\n- Fri 10-02: Dentist\n\n## Pressure\n\nlevel:: steady\nfree_until:: 2026-10-01 21:45\nslack_h:: 6.7\nnext_anchor:: 2026-10-01 19:00\n\n- Verdict: You are free until about 9:45 PM. After that, the report has to start for everything due to still fit.\n- You must be present for: the evening feeding at 7 PM.\n\n## Day\n\nzone:: open\n\n- 10:00-11:15 Chemistry class\n- 19:00-20:30 Muay Thai\n\n## Needs your attention\n\n_Nothing._\n\n## Last saved\n\n_No new reports in this run._\n';
   let mockInbox = [];
 
   async function getNext() {
@@ -1047,7 +1049,10 @@
     if (!MOCK && !store.get('token')) { $('say').textContent = 'Open Settings below and add your GitHub token to connect.'; $('meta').textContent = 'not connected'; $('settings').open = true; drawer(true); return; }
     try {
       const before = next?.made;
-      next = parseNext(await getNext());
+      const fresh = parseNext(await getNext());
+      if (stale(fresh)) return false; // the planner hasn't caught up yet: keep the step already shown
+      closedIds.clear();
+      next = fresh;
       render();
       status('');
       if (speakIfNew && next.made !== before && $('autospeak').checked) speak(next.say);
@@ -1092,7 +1097,8 @@
 
   // ---------- handling what was said ----------
   function handle(text) {
-    const r = toCommands(text, today());
+    const r = toCommands(text, today(), { tasks: next?.tasks || [], step: next?.step || '' });
+    lastHandled = r;
     if (!r.commands.length) return act(r.action, r.minutes);
     pendingLines = r.commands;
     $('heard').textContent = `“${text}”`;
@@ -1145,15 +1151,36 @@
       setState('idle');
       $('pending').classList.add('hidden');
       const made = next?.made;
-      // the queue is already computed: give the next step right away, then confirm when the engine has run
-      const upNext = next?.after[0];
+      // The current step was reported done or skipped: the next one is already known, so show it and say it at once
+      // (the same text on screen and out loud). Anything else waits for the engine, then shows and says its answer.
+      const closes = lastHandled?.closesCurrent || (next?.tasks?.length && lines.length === 1 && /^(done|skip):/.test(lines[0]) && next.tasks.every((id) => lines[0].includes(id)));
+      let shownNow = null;
+      const seq = ++sendSeq;
+      if (closes && next) {
+        for (const id of next.tasks || []) closedIds.add(id);
+        const upNext = next.after[0];
+        shownNow = upNext ? `Saved. Next: ${upNext}.` : 'Saved. Nothing else is queued right now.';
+        // one step at a time: the next step, with its own tasks, so the next "Done" closes it too
+        next = { ...next, say: shownNow, step: upNext || '', tasks: (next.afterIds || [])[0] || [], after: next.after.slice(1), afterIds: (next.afterIds || []).slice(1), then: '' };
+        render();
+        if ($('autospeak').checked) speak(shownNow);
+      } else if ($('autospeak').checked) speak('Saved.');
       status('Saved. Updating…');
-      if ($('autospeak').checked) speak(upNext ? `Saved. Next: ${upNext}.` : 'Saved.');
       if (MOCK) return status(`Saved (demo). Inbox: ${mockInbox.join(' | ')}`);
-      for (let i = 0; i < 12; i++) { // up to ~2 minutes
-        await new Promise((r) => setTimeout(r, 10000));
+      const strip = (t) => (t || '').replace(/^(Saved|Rechecked)\. /, '');
+      for (let i = 0; i < 36; i++) { // every 5 s, up to 3 minutes
+        await new Promise((r) => setTimeout(r, 5000));
+        if (seq !== sendSeq) return; // a newer report took over
         const fresh = parseNext(await getNext());
-        if (fresh.made !== made) { next = fresh; render(); status('Updated.'); if (next.attention.length && $('autospeak').checked) speak(`One thing needs your attention: ${next.attention[0]}`); return; }
+        if (fresh.made !== made && !stale(fresh)) {
+          closedIds.clear();
+          next = fresh; render(); status('Updated.');
+          if ($('autospeak').checked) {
+            if (next.attention.length) speak(`One thing needs your attention: ${next.attention[0]}`);
+            else if (strip(next.say) !== strip(shownNow)) speak(next.say); // the engine's answer differs from what was shown: say the new one
+          }
+          return;
+        }
       }
       status('Saved. It will catch up on its next run.', 'warn');
     } catch (e) { setState('idle'); pendingLines = lines; status(`Not saved: ${e.message}`, 'bad'); if ($('autospeak').checked) speak('Not saved.'); }
@@ -1189,8 +1216,14 @@
       if (rec) { try { rec.stop(); } catch {} return; }
       try { speechSynthesis.cancel(); } catch {}
       rec = new SR();
-      rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; heard = false;
-      rec.onresult = (e) => { heard = true; handle(e.results[0][0].transcript); };
+      rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 5; heard = false;
+      rec.onresult = (e) => {
+        heard = true;
+        const alts = Array.from(e.results[0]).map((a) => a.transcript).filter(Boolean);
+        const ctx = { tasks: next?.tasks || [], step: next?.step || '' };
+        const best = alts.find((t) => { const r = toCommands(t, today(), ctx); return r.action || (r.commands.length && !r.uncertain); }) || alts[0];
+        handle(best);
+      };
       rec.onerror = (e) => {
         if (ERRORS[e.error]) fallback(ERRORS[e.error]);
         else if (e.error === 'no-speech' || e.error === 'aborted') status('I did not catch anything. Tap and talk again.', 'warn');

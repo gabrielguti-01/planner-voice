@@ -117,7 +117,7 @@
         continue;
       }
       if ((m = s.match(/^(?:i'?m |i am )?done(?: with)?\s+(?:the\s+|my\s+)?(.+)$/i))) { out.commands.push(`done: ${m[1]}`); continue; }
-      if ((m = s.match(/^(.+?)\s+(?:is|are) (?:done|finished)$/i))) { out.commands.push(`done: ${m[1].replace(/^the\s+/i, '')}`); continue; }
+      if ((m = s.match(/^(.+?)\s+(?:is|are|was|were|got|have been|has been|are all|is all) (?:all )?(?:done|finished|washed|cleaned|taken care of)$/i))) { out.commands.push(`done: ${m[1].replace(/^the\s+/i, '')}`); continue; }
 
       out.commands.push(`note: ${s}`);
       out.uncertain = true;

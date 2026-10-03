@@ -1161,17 +1161,36 @@
   const talk = $('talk');
   if (!SR) { talk.textContent = 'Voice input not supported here'; talk.disabled = true; }
   else {
+    // A fresh recogniser for every tap: iPhones often refuse to restart a used one.
     talk.textContent = 'Tap and talk';
-    const rec = new SR();
-    rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1;
-    let on = false;
-    rec.onresult = (e) => handle(e.results[0][0].transcript);
-    rec.onerror = (e) => status(e.error === 'not-allowed' ? 'Microphone permission is needed for voice.' : `Voice input stopped (${e.error}).`, 'warn');
-    rec.onend = () => { on = false; setState('idle'); talk.classList.remove('listening'); talk.textContent = 'Tap and talk'; };
+    let rec = null, heard = false;
+    const reset = () => { rec = null; setState('idle'); talk.classList.remove('listening'); talk.textContent = 'Tap and talk'; };
+    const fallback = (why) => { // voice is unavailable here: the keyboard's own dictation microphone still works
+      status(why + ' Tap the microphone on the keyboard to dictate instead.', 'warn');
+      drawer(true);
+      const box = $('typed');
+      if (box.focus) setTimeout(() => box.focus(), 300);
+    };
+    const ERRORS = {
+      'not-allowed': 'Microphone access is off for this app (iPhone Settings, then Apps, then Safari, then Microphone).',
+      'service-not-allowed': 'Voice input is blocked here. Turn on Dictation (Settings, General, Keyboard) and try again, or open the app in Safari.',
+      'audio-capture': 'No microphone was found.',
+      'network': 'Voice input needs an internet connection.',
+    };
     talk.onclick = () => {
-      if (on) return rec.stop();
-      speechSynthesis?.cancel();
-      try { rec.start(); on = true; setState('listening'); talk.classList.add('listening'); talk.textContent = 'Listening… tap to stop'; } catch {}
+      if (rec) { try { rec.stop(); } catch {} return; }
+      try { speechSynthesis.cancel(); } catch {}
+      rec = new SR();
+      rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; heard = false;
+      rec.onresult = (e) => { heard = true; handle(e.results[0][0].transcript); };
+      rec.onerror = (e) => {
+        if (ERRORS[e.error]) fallback(ERRORS[e.error]);
+        else if (e.error === 'no-speech' || e.error === 'aborted') status('I did not catch anything. Tap and talk again.', 'warn');
+        else status('Voice input stopped (' + e.error + ').', 'warn');
+      };
+      rec.onend = () => { if (!heard && !$('status').textContent) status('I did not catch anything. Tap and talk again.', 'warn'); reset(); };
+      try { status(''); rec.start(); setState('listening'); talk.classList.add('listening'); talk.textContent = 'Listening… tap to stop'; }
+      catch (err) { reset(); fallback('Voice input could not start (' + ((err && err.name) || 'error') + ').'); }
     };
   }
 

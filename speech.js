@@ -113,6 +113,107 @@
     return parts.length > 0 && parts.every((p) => p.some((w) => r.has(w)));
   }
 
+  // ---- inferring misheard words from the situation ----
+  // Words that are real everyday English: never replaced on their own (only inside a two-word phrase that sounds
+  // exactly like a planner phrase, e.g. "came lab" → "chem lab").
+  const COMMON = new Set(`a an the i me my mine we us our you your he him his she her it its they them their this that these those
+    is am are was were be been being do does did done doing have has had having will would can could should shall may might must
+    and or but if then so because as at by for from in into of off on onto out over to up with without about after before again all any
+    some no not only just also very too now today tonight tomorrow yesterday here there where when what which who how why
+    go goes went gone going get got getting make made making take took taken taking put give gave come came see saw know knew
+    think thought say said tell told want need like feel felt look looked use used find found try tried call called work worked
+    eat ate eaten fed feed drink drank one two three four five six seven eight nine ten first second next last more less
+    ok okay yes yeah yep no nope please thanks thank finished start started stop stopped skip later back good bad big small
+    little time minute minutes hour hours day night morning evening afternoon week still already ready late early swept brushed
+    cleaned washed showered scooped watered paid sent bought turned handed set let run ran keep kept left right well much many`.split(/\s+/));
+  // Sound key: letters that are easy to confuse by ear (b/p, d/t, g/k, v/f, s/z, c/k) count as the same; vowels after the first letter drop.
+  function soundKey(w) {
+    let s = String(w).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!s || /^\d+$/.test(s)) return s;
+    s = s.replace(/^(kn|gn|pn|wr)/, (m) => m[1]).replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/sch/g, 'sk').replace(/ch/g, 'k').replace(/sh/g, 's')
+      .replace(/th/g, 't').replace(/c(?=[eiy])/g, 's').replace(/[cq]/g, 'k').replace(/x/g, 'ks').replace(/z/g, 's').replace(/dg/g, 'j').replace(/gh/g, '')
+      .replace(/wh/g, 'w').replace(/v/g, 'f').replace(/d/g, 't').replace(/b/g, 'p').replace(/g/g, 'k');
+    return (s[0] + s.slice(1).replace(/[aeiouyhw]/g, '')).replace(/(.)\1+/g, '$1');
+  }
+  function lev(a, b) {
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  const baseOf = (w) => w.replace(/(ings?|ed|es|s|er)$/, '');
+  // Everyday planner words, always known, plus whatever the screen shows (the step on screen counts most).
+  const STATIC_VOCAB = ['Baby Man', 'litter box', 'nootropic drink', 'smoothie', 'laundry', 'washer', 'dryer', 'basket', 'sheets', 'dishes', 'groceries',
+    'avocado', 'blueberries', 'pineapple', 'kiwi', 'steak', 'sandwich', 'deodorant', 'medication', 'vitamin D', 'water bottle', 'Grandma', 'chem lab',
+    'calc', 'quiz', 'exam', 'homework', 'checkpoint', 'training program', 'workout', 'haircut', 'therapy', 'Purina', 'Tender Selects', 'ginger', 'bread', 'cheese'];
+  function vocabFrom(next) {
+    if (!next) return STATIC_VOCAB.map((t) => ({ t, w: 1 }));
+    const L = (arr, w) => (arr || []).map((t) => ({ t: String(t).replace(/^(?:now|later|~?\d{1,2}:\d{2}|at \d{1,2}:\d{2}): /, ''), w }));
+    return [...L([next.step], 3), ...L(next.after, 2), ...L(next.today, 1.5), ...L(next.plan, 1.5), ...L(next.week, 1), ...L(next.groceries, 1), ...L(STATIC_VOCAB, 1)];
+  }
+  // Single words (4+ letters, not everyday English) and 2-3 word phrases that start and end with a real content word.
+  function termsOf(vocab) {
+    const seen = new Map();
+    for (const { t, w } of vocab) {
+      const ws = (String(t).toLowerCase().match(/[a-z0-9']+/g) || []);
+      for (let n = 1; n <= 3; n++) for (let i = 0; i + n <= ws.length; i++) {
+        const g = ws.slice(i, i + n);
+        if (COMMON.has(g[0]) || COMMON.has(g[g.length - 1]) || g.some((x) => /^\d+$/.test(x))) continue;
+        if (n === 1 && g[0].length < 4) continue;
+        const k = g.join(' '), prev = seen.get(k);
+        if (!prev || prev.w < w) seen.set(k, { t: k, n, key: soundKey(g.join('')), w });
+      }
+    }
+    return [...seen.values()];
+  }
+  /** Replace words that were probably misheard with the planner word that sounds closest. Returns { text, changes }. */
+  function infer(text, vocab) {
+    if (!vocab || !vocab.length) return { text, changes: [] };
+    const terms = termsOf(vocab), known = new Set(terms.map((t) => t.t));
+    const toks = text.split(' '), out = [], changes = [];
+    for (let i = 0; i < toks.length;) {
+      let hit = null;
+      for (const n of [3, 2, 1]) {
+        if (i + n > toks.length) continue;
+        const win = toks.slice(i, i + n).map((w) => w.toLowerCase().replace(/[^a-z0-9']/g, ''));
+        const phrase = win.join(' ');
+        if (win.some((w) => !w || /^\d/.test(w)) || known.has(phrase) || win.every((w) => COMMON.has(w))) continue;
+        if (n === 1 && (COMMON.has(win[0]) || win[0].length < 4)) continue;
+        const key = soundKey(win.join(''));
+        let best = null;
+        for (const t of terms) {
+          if (Math.abs(t.n - n) > 1 || t.t === phrase) continue;
+          if (n > 1 && t.n !== n && (COMMON.has(win[0]) || COMMON.has(win[n - 1]))) continue; // "the training pogram" keeps its "the"
+          const kd = lev(key, t.key), ld = lev(win.join(''), t.t.replace(/ /g, '')) / Math.max(win.join('').length, t.t.length);
+          const ok = n === 1 && t.n === 1
+            ? (kd === 0 && ld <= 0.5) || (kd === 1 && key.length >= 4 && ld <= 0.34)
+            : (kd === 0 && ld <= 0.5) || (kd === 1 && key.length >= 5 && ld <= 0.3);
+          if (!ok) continue;
+          if (n === 1 && t.n === 1 && baseOf(win[0]) === baseOf(t.t)) continue; // "swept"/"sweep", "dishes"/"dish": same word
+          if (n > 1 && win.filter((w, j) => !COMMON.has(w) && !known.has(w)).length === 0 && kd > 0) continue;
+          const score = kd * 2 + ld - t.w * 0.1;
+          if (!best || score < best.score) best = { t, score };
+        }
+        if (best) { hit = { n, to: best.t.t, from: toks.slice(i, i + n).join(' ') }; break; }
+      }
+      if (hit) { out.push(hit.to); changes.push({ from: hit.from, to: hit.to }); i += hit.n; } else { out.push(toks[i]); i++; }
+    }
+    return { text: out.join(' '), changes };
+  }
+  /** Of the recogniser's guesses, the one that makes the most sense here. */
+  function bestGuess(alts, today, ctx = {}) {
+    let best = null;
+    alts.forEach((alt, idx) => {
+      const r = toCommands(alt, today, ctx);
+      const content = (r.text || alt).toLowerCase().match(/[a-z']+/g) || [];
+      const terms = new Set(termsOf(ctx.vocab || []).flatMap((t) => t.t.split(' ')));
+      const fit = content.filter((w) => terms.has(w)).length;
+      const score = (r.action ? 2 : 0) + (r.commands.length && !r.uncertain ? 3 : 0) + (r.closesCurrent ? 2 : 0) + fit * 0.5 - (r.changes || []).length * 0.4 - idx * 0.3;
+      if (!best || score > best.score) best = { alt, score };
+    });
+    return best ? best.alt : alts[0];
+  }
+
   const DONE_VERBS = 'turned in|handed in|did|finished|completed|took|fed|brushed|scooped|ate|had|washed|cleaned|called|sent|paid|swept|showered|shaved|mopped|vacuumed|emailed|bought|submitted|uploaded|studied|watered|made|drank|filled|organized|folded|checked|refilled|clipped|put on|picked up|dropped off|talked to';
 
   /**
@@ -122,7 +223,10 @@
    */
   function toCommands(said, today, ctx = {}) {
     const out = { commands: [], action: null, uncertain: false };
-    let text = fix(said.trim().replace(/\s+/g, ' ').replace(/[.!]+$/, ''));
+    let text = fix(said.trim().replace(/\s+/g, ' ').replace(/[.!]+$/, ''))
+      .replace(/\b(?:um+|uh+|erm|hmm+|uh-huh)\b,?\s*/gi, '').replace(/\b(\w+)( \1\b)+/gi, '$1').trim(); // fillers and stutters ("I I fed")
+    if (ctx.vocab) { const inf = infer(text, ctx.vocab); text = inf.text; out.changes = inf.changes; }
+    out.text = text;
     if (!text) return out;
     // "done, what's next" / "fed him what's next": the question at the end is its own request
     const tail = text.match(/^(.*?\S)[,.]?\s+(?:so |and |ok(?:ay)? |now )?(?:what'?s|what is) next\??$/i);
@@ -137,6 +241,10 @@
       const low = s.toLowerCase();
       let m;
 
+      // the workout, however it is said
+      if (/^i (?:went to|hit|got back from) the gym$|^i (?:worked out|exercised|trained|did (?:my |a |the )?work ?out|finished (?:my |the )?work ?out)$/i.test(s)) { out.commands.push('done: gym'); continue; }
+      // a machine that finished is not a report about a load: the planner says which load to move
+      if (/^(?:the )?(?:washer|dryer) (?:is|was|just)? ?(?:done|finished|ready|beeped|went off)$/i.test(s)) { out.action = out.action || 'next'; continue; }
       // "done" on its own: the step on screen is finished (its task IDs come from the screen)
       if (BARE_DONE.test(s)) { if (cur.length) { out.commands.push(`done: ${cur.join(', ')}`); out.closesCurrent = true; } else out.action = out.action || 'next'; continue; }
       if (BARE_SKIP.test(s) && cur.length) { out.commands.push(`skip: ${cur.join(', ')}`); out.closesCurrent = true; continue; }
@@ -280,7 +388,7 @@
     return `Yes, go. You'd be done by ${clock(end)}, and you're free until ${free == null ? 'whenever' : clock(free)}. Pressure is ${p.level}.`;
   }
 
-  const api = { toCommands, parseNext, pullDate, pullMinutes, freeAnswer };
+  const api = { toCommands, parseNext, pullDate, pullMinutes, freeAnswer, infer, vocabFrom, bestGuess, soundKey };
   globalThis.PlannerSpeech = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

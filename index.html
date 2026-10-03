@@ -1096,12 +1096,13 @@
   $('speak').onclick = () => speak($('say').textContent);
 
   // ---------- handling what was said ----------
-  function handle(text) {
-    const r = toCommands(text, today(), { tasks: next?.tasks || [], step: next?.step || '' });
+  function handle(text, spoken = false) {
+    // spoken words are checked against the words that matter right now; typed words are taken as written
+    const r = toCommands(text, today(), { tasks: next?.tasks || [], step: next?.step || '', vocab: spoken ? PlannerSpeech.vocabFrom(next) : null });
     lastHandled = r;
     if (!r.commands.length) return act(r.action, r.minutes);
     pendingLines = r.commands;
-    $('heard').textContent = `“${text}”`;
+    $('heard').textContent = r.changes && r.changes.length ? `“${text}” → understood as “${r.text}”` : `“${text}”`;
     $('pendingTitle').textContent = r.uncertain ? "I'm not sure what that is. Save it as a note?" : 'I\'ll record';
     $('lines').innerHTML = '';
     for (const l of r.commands) { const c = document.createElement('code'); c.textContent = l; $('lines').appendChild(c); }
@@ -1217,12 +1218,15 @@
       try { speechSynthesis.cancel(); } catch {}
       rec = new SR();
       rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 5; heard = false;
+      try {
+        const GL = window.SpeechGrammarList || window.webkitSpeechGrammarList;
+        if (GL) { const words = [...new Set(PlannerSpeech.vocabFrom(next).flatMap((v) => String(v.t).toLowerCase().match(/[a-z]{4,}/g) || []))].slice(0, 200); const g = new GL(); g.addFromString('#JSGF V1.0; grammar planner; public <w> = ' + words.join(' | ') + ' ;', 1); rec.grammars = g; }
+      } catch {}
       rec.onresult = (e) => {
         heard = true;
         const alts = Array.from(e.results[0]).map((a) => a.transcript).filter(Boolean);
-        const ctx = { tasks: next?.tasks || [], step: next?.step || '' };
-        const best = alts.find((t) => { const r = toCommands(t, today(), ctx); return r.action || (r.commands.length && !r.uncertain); }) || alts[0];
-        handle(best);
+        const ctx = { tasks: next?.tasks || [], step: next?.step || '', vocab: PlannerSpeech.vocabFrom(next) };
+        handle(PlannerSpeech.bestGuess(alts, today(), ctx), true);
       };
       rec.onerror = (e) => {
         if (ERRORS[e.error]) fallback(ERRORS[e.error]);

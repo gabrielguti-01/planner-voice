@@ -99,8 +99,39 @@
   ];
   const fix = (t) => FIXES.reduce((x, [re, to]) => x.replace(re, to), t);
   // A whole sentence that only says the current step is finished ("done", "did it", "ok next"), and its misheard forms.
-  const BARE_DONE = /^(?:(?:ok(?:ay)?|yes|yep|yeah|alright|all right|good|cool)[, ]+)?(?:i'?m |i am |it'?s |that'?s |all |we'?re |i |i'?ve |i have |just )?(?:all )?(?:done(?: done)?|dun|don|dawn|finished(?: it| that)?|did it|did that|done it|complete(?:d)?(?: it)?|got it(?: done)?|that one'?s done|done with (?:it|that|this(?: one)?)|check(?:ed)?(?: (?:it|that)(?: off)?)?|taken care of|took care of (?:it|that)|handled(?: it)?|that'?s it|next(?: one| step| thing)?|move on|moving on)(?:[, ]+(?:next|what'?s next|next one))?$/i;
-  const BARE_SKIP = /^(?:skip(?: (?:it|that|this(?: one)?))?|not (?:now|today)|pass|later)$/i;
+  // ---- every common way to say "finished" with nothing else: the step on screen is done ----
+  // Shared with the engine (engine/commands.mjs imports this file), so the phone and the planner always agree.
+  const DONE_SAID = new Set(['done', 'dun', 'don', 'dawn', 'finished', 'finish', 'complete', 'completed', 'did it', 'did that', 'did this', 'did this one', 'did that one',
+    'done it', 'done that', 'done that one', 'done this one', 'finished it', 'finished that', 'finished this', 'finished this one', 'finished that one', 'completed it', 'completed that',
+    'got it', 'got it done', 'got that done', 'got this done', 'got that one done', 'nailed it', 'knocked it out', 'crushed it', 'handled', 'handled it', 'handled that',
+    'taken care of', 'took care of it', 'took care of that', 'wrapped up', 'wrapped it up', 'sorted', 'all set', 'set', 'through', 'over', 'over with', 'been done',
+    'accomplished', 'accomplished it', 'done with it', 'done with that', 'done with this', 'done with this one', 'done with that one', 'finished with it', 'finished with that',
+    'through with it', 'checked', 'checked off', 'checked it off', 'ticked off', 'crossed off', 'squared away', 'a wrap', 'it', 'that', 'that one', 'this one', 'done and done',
+    'finito', 'mission accomplished', 'success', 'boom', 'there we go', 'there you go', 'check', 'next', 'next one', 'next step', 'next task', 'next thing', 'next please',
+    'moving on', 'move on', 'on to the next', 'onto the next', 'on to the next one', 'onto the next one', 'ready for the next one', 'give me the next one', 'whats the next one',
+    'the next one', 'and done', 'all good here', 'thats that', 'it is done', 'it is finished', 'it is complete', 'it is completed']);
+  const SUBJECTS = ["i'm ", 'im ', 'i am ', "we're ", 'we are ', "it's ", 'its ', 'it is ', "that's ", 'thats ', 'that is ', 'this is ', "this one's ", "that one's ", 'that one is ', 'this one is ',
+    'all ', "i'm all ", "it's all ", "that's all ", "i've ", 'ive ', 'i have ', 'i ', 'already ', 'i already ', 'just ', 'i just ', "i've just ", 'i have just ', 'task ', 'step ', 'the task is ',
+    'the step is ', "it's been ", 'it has been ', "that's been ", 'yes ', 'totally ', 'completely ', 'fully ', 'officially ', 'finally ', 'now ', "i'm finally ", "i'm officially "];
+  const MARK = /^(?:(?:go ahead and|please|you can|can you|could you) )?(?:mark|check|cross|tick|strike|scratch)(?: it| that| this| this one| that one)?(?: off| out| done| as done| complete| as complete| completed| as completed| finished| as finished)?(?: the list| my list)?$/;
+  const norm = (t, tails = true) => {
+    let s = String(t).toLowerCase().replace(/[’]/g, "'").replace(/[^a-z' ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    s = s.replace(/\b([a-z']+)( \1\b)+/g, '$1'); // "done done", "done, done"
+    for (let i = 0; i < 4; i++) s = s.replace(/^(?:ok|okay|k|yes|yep|yup|yeah|ya|alright|all right|so|well|great|cool|good|perfect|awesome|sweet|nice|um+|uh+|and|right|sure|hey|alrighty)\s+/, '');
+    if (tails) for (let i = 0; i < 3; i++) s = s.replace(/\s+(?:now|already|thanks|thank you|please|for now|for today|today|too|as well|then|here|bro|man|dude|yay|lol|whats next|what's next|next|next one|next please|on to the next(?: one)?|onto the next(?: one)?|and next|so next|so what's next)$/, '');
+    return s.trim();
+  };
+  /** True when the sentence only says "finished" (in any common way) and names nothing. */
+  function isBareDone(t) {
+    if (/\?\s*$/.test(String(t)) && !/what'?s next\?\s*$/i.test(String(t))) return false; // "is it done?" is a question
+    if (/\b(?:not|almost|nearly|half|haven'?t|hasn'?t|didn'?t|isn'?t|wasn'?t|never|barely|partly|kinda|kind of|mostly)\b/i.test(String(t))) return false;
+    const said = (s) => !!s && (DONE_SAID.has(s) || MARK.test(s) || SUBJECTS.some((p) => s.startsWith(p) && (DONE_SAID.has(s.slice(p.length)) || MARK.test(s.slice(p.length)))));
+    return said(norm(t, false)) || said(norm(t)); // "on to the next one" as it is, or "done, next" without its tail
+  }
+  const SKIP_SAID = new Set(['skip', 'skip it', 'skip that', 'skip this', 'skip this one', 'skip that one', 'not now', 'not today', 'not right now', 'pass', 'later', 'maybe later',
+    'do it later', "i'll do it later", 'ill do it later', 'next time', 'postpone', 'postpone it', 'push it', 'push it back', 'not doing that', 'not doing it', "can't right now",
+    'cant right now', "can't do it now", 'cant do it now', "won't do it today", 'wont do it today', 'not this one', 'skip for now', 'skip for today']);
+  const isBareSkip = (t) => [norm(t, false), norm(t)].some((x) => SKIP_SAID.has(x.replace(/^i'?m going to |^gonna /, '')));
 
   // Does a report cover the whole step on screen? Every part of the step ("X and Y") must share a word with it.
   const PAST = { fed: 'feed', ate: 'eat', eaten: 'eat', took: 'take', taken: 'take', did: 'do', done: 'do', made: 'make', swept: 'sweep', drank: 'drink', bought: 'buy', went: 'go', gave: 'give', sent: 'send', paid: 'pay', threw: 'throw', put: 'put', wrote: 'write', ran: 'run', had: 'have', brought: 'bring', got: 'get', hung: 'hang', called: 'call', showered: 'shower' };
@@ -246,8 +277,8 @@
       // a machine that finished is not a report about a load: the planner says which load to move
       if (/^(?:the )?(?:washer|dryer) (?:is|was|just)? ?(?:done|finished|ready|beeped|went off)$/i.test(s)) { out.action = out.action || 'next'; continue; }
       // "done" on its own: the step on screen is finished (its task IDs come from the screen)
-      if (BARE_DONE.test(s)) { if (cur.length) { out.commands.push(`done: ${cur.join(', ')}`); out.closesCurrent = true; } else out.action = out.action || 'next'; continue; }
-      if (BARE_SKIP.test(s) && cur.length) { out.commands.push(`skip: ${cur.join(', ')}`); out.closesCurrent = true; continue; }
+      if (isBareDone(s)) { if (cur.length) { out.commands.push(`done: ${cur.join(', ')}`); out.closesCurrent = true; } else out.action = out.action || 'next'; continue; }
+      if (isBareSkip(s) && cur.length) { out.commands.push(`skip: ${cur.join(', ')}`); out.closesCurrent = true; continue; }
 
       if (/^(?:what'?s|what is|whats) next|^next up|^what (?:now|should i do)|^check the repo|^start (?:my|the) day|^what do i (?:need|have) to do|^where do i start/.test(low)) { out.action = out.action || 'next'; continue; }
       if (/^re-?check|^check (?:it |that |this )?again|^re-?prioriti[sz]e|^re-?calculate|^is (?:this|that|it) still (?:the )?(?:best|right|most)/.test(low)) { out.action = 'recheck'; continue; }
@@ -333,6 +364,7 @@
       out.commands.push(`note: ${s}`);
       out.uncertain = true;
     }
+    out.commands = [...new Set(out.commands)];
     // a report that covers the whole step on screen closes it: the screen can move on at once
     if (!out.closesCurrent && ctx.step && out.commands.length && out.commands.every((c) => /^done:/.test(c))) out.closesCurrent = coversStep(out.commands.map((c) => c.slice(5)).join(' and '), ctx.step);
     return out;
@@ -388,7 +420,7 @@
     return `Yes, go. You'd be done by ${clock(end)}, and you're free until ${free == null ? 'whenever' : clock(free)}. Pressure is ${p.level}.`;
   }
 
-  const api = { toCommands, parseNext, pullDate, pullMinutes, freeAnswer, infer, vocabFrom, bestGuess, soundKey };
+  const api = { toCommands, parseNext, pullDate, pullMinutes, freeAnswer, infer, vocabFrom, bestGuess, soundKey, isBareDone, isBareSkip };
   globalThis.PlannerSpeech = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

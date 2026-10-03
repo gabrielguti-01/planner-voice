@@ -1025,7 +1025,7 @@
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
     $('gauge').dataset.level = lvl || '';
     $('gauge').textContent = (lvl === 'tight' || lvl === 'critical') && fu && fu !== 'open' ? lvl + ' · free until ' + clockText(new Date(fu.replace(' ', 'T')).getTime()) : '';
-    $('meta').textContent = next.tired ? 'tired mode' : '';
+    $('meta').textContent = next.brainDead ? 'brain-dead mode' : next.tired ? 'tired mode' : '';
     const fill = (id, arr, empty) => { $(id).innerHTML = ''; for (const t of (arr.length ? arr : [empty])) { const li = document.createElement('li'); li.textContent = t; $(id).appendChild(li); } };
     fill('after', next.after, 'Nothing queued.');
     $('afterBox').open = false; // one thing at a time: the rest stays folded until asked for

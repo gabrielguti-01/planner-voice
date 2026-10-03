@@ -85,6 +85,7 @@
       if ((m = s.match(/^(?:we'?re|i'?m|we are|i am)\s+(?:almost |nearly |running )?(?:out of|low on) (.+)$/i)) || (m = s.match(/^(?:we|i)\s+(?:ran out of|are out of|need to buy|need to get) (?:more |some |new )?(.+)$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^i (?:just )?bought (.+)$/i))) { out.commands.push(`bought: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^i (?:just )?(?:had|ate) (?:a |an |my )?(steak|smoothie|sandwich(?:es)?|\d+ sandwich(?:es)?)(?: for \w+)?$/i))) { out.commands.push(`ate: ${m[1].toLowerCase()}`); continue; }
+      if ((m = s.match(/^(?:do|put|make) (.+?) (?:first|my (?:number one|top|first) (?:priority|thing))(?: after (?:the )?laundry)?$/i))) { out.commands.push(`first: ${m[1].replace(/^the\s+/i, '')}`); continue; }
       if (/^what'?s left|^day list|^what(?:'s| is) (?:still )?(?:open|remaining)/.test(low)) { out.action = 'list'; continue; }
       if (/^week ahead|^what'?s coming up|^what(?:'s| is) (?:this|the) week/.test(low)) { out.action = 'week'; continue; }
       if (/^(?:can|should|could|may) i (?:go|hang|leave|take|join|head)|\bdo i have time\b|\bam i free\b|\bbeen invited\b|^how (?:much )?(?:free )?time do i have|^how(?:'s| is) (?:my )?pressure|^is it ok(?:ay)? (?:if i|to) (?:go|hang)/.test(low)) {
@@ -93,7 +94,8 @@
         continue;
       }
 
-      if (/\b(?:i'?m|i am|feeling)\b.*\b(?:tired|wiped|exhausted|drained|brain ?dead|worn out)\b/.test(low) && !/\bnot\b/.test(low)) { out.commands.push('tired: on'); continue; }
+      if (/\bbrain[ -]?dead\b|\bcan'?t think\b|\bbrain is (?:fried|mush|dead)\b/.test(low)) { out.commands.push(/\bnot\b|\bno longer\b|\banymore\b|\boff\b/.test(low) ? 'braindead: off' : 'braindead: on'); continue; }
+      if (/\b(?:i'?m|i am|feeling)\b.*\b(?:tired|wiped|exhausted|drained|worn out)\b/.test(low) && !/\bnot\b/.test(low)) { out.commands.push('tired: on'); continue; }
       if (/^(?:i'?m|i am) (?:fine|ok|okay|good|better)(?: now)?$|\bnot tired\b/.test(low)) { out.commands.push('tired: off'); continue; }
 
       if (/\b(?:trash|garbage)\b/.test(low) && /\bnot (?:ready|full)\b/.test(low)) { out.commands.push('not ready: trash'); continue; }
@@ -142,7 +144,7 @@
     const after = section('After that').split('\n').filter((l) => /^\d+\./.test(l)).map((l) => clean(l.replace(/^\d+\.\s*/, '').split(' — ')[0]));
     const bullets = (name) => section(name).split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2)));
     return {
-      made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on',
+      made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
       say: section('Say this'), after, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), late: bullets('Late or waiting'), groceries: bullets('Groceries'),
       then: ((section('Now').match(/^- Then: (.*)$/m) || [])[1] || '').trim(),

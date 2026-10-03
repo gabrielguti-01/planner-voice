@@ -187,7 +187,7 @@
       const r = MOCK ? { devices: [{ id: 'd1', name: 'iPhone', is_active: true }] } : await api('/me/player/devices');
       sel.innerHTML = '';
       const list = r.devices || [];
-      if (!list.length) { const o = document.createElement('option'); o.textContent = 'No device found: open Spotify somewhere'; o.value = ''; sel.append(o); return; }
+      if (!list.length) { const o = document.createElement('option'); o.textContent = 'No device found: open Spotify and play something, then tap here again'; o.value = ''; sel.append(o); return; }
       for (const d of list) { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name + (d.is_active ? ' (playing here)' : ''); o.selected = !!d.is_active; sel.append(o); }
     } catch (e) { note(e.message, true); }
   }
@@ -233,6 +233,9 @@
     $('muRepeat').onclick = () => act(() => put('/me/player/repeat?state=' + ({ off: 'context', context: 'track', track: 'off' }[state?.repeat_state || 'off'])));
     $('muSeek').onchange = () => act(() => put('/me/player/seek?position_ms=' + $('muSeek').value));
     $('muVol').onchange = () => act(() => put('/me/player/volume?volume_percent=' + $('muVol').value));
+    // the list goes stale quickly (a phone's Spotify drops off when it sleeps), so reload it whenever it is opened
+    $('muDevice').addEventListener('focus', devices);
+    $('muDevice').addEventListener('pointerdown', devices);
     $('muDevice').onchange = () => $('muDevice').value && act(() => put('/me/player', { device_ids: [$('muDevice').value], play: playing() }));
     $('muGo').onclick = () => search($('muQ').value);
     $('muQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') search($('muQ').value); });

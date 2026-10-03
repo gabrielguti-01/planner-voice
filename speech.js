@@ -58,6 +58,48 @@
     return days.length ? days.join(', ') : null;
   }
 
+  // ---- events: "I have a haircut at 12:30 today", "Dentist Friday at 3 PM", "Party Saturday from 7 to 10 PM" ----
+  const p2 = (n) => String(n).padStart(2, '0');
+  function to24(h, mm, ap, pmHint) {
+    h = +h; mm = +(mm || 0);
+    if (ap) { if (/^p/i.test(ap) && h < 12) h += 12; if (/^a/i.test(ap) && h === 12) h = 0; }
+    else if (pmHint && h < 12) h += 12;
+    else if (h >= 1 && h <= 6) h += 12; // "at 3" means the afternoon; 7-11 means the morning; 12 is noon
+    return h * 60 + mm;
+  }
+  /** The time in an event sentence → { start, end, text } in minutes after midnight, or null. */
+  function eventClock(t) {
+    const pm = /\b(?:tonight|this evening|in the evening|this afternoon)\b/i.test(t);
+    let m = t.match(/\b(?:from |between )?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:-|to|until|till|and)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
+    if (m && (m[3] || m[6] || m[2] || m[5] || /\b(?:from|between)\b/i.test(m[0]))) {
+      const endAp = m[6], startAp = m[3] || (endAp && +m[1] <= +m[4] ? endAp : null);
+      const start = to24(m[1], m[2], startAp, pm), end = to24(m[4], m[5], endAp, pm || (startAp && /p/i.test(startAp)));
+      return { start, end: end > start ? end : start + 60, text: m[0] };
+    }
+    m = t.match(/\b(?:at |@ ?)?(\d{1,2}):(\d{2})\s*(am|pm)?\b/i) || t.match(/\b(?:at )?(\d{1,2})()\s*(am|pm)\b/i) || t.match(/\bat (\d{1,2})()()\b(?!\s*(?:minutes|mins|hours|%))/i);
+    if (m) { const start = to24(m[1], m[2], m[3], pm); return { start, end: start + 60, text: m[0] }; }
+    if ((m = t.match(/\bat noon\b/i))) return { start: 720, end: 780, text: m[0] };
+    return null;
+  }
+  const EVENT_WORDS = /\b(?:appointment|appt|meeting|class|party|dinner with|lunch with|breakfast with|call with|haircut|dentist|doctor|therapy|interview|game|practice|flight|session|event|reservation|concert|show|visit|checkup|check-up|shift|pickup|pick-up|ceremony|birthday|wedding|movie)\b/i;
+  const EVENT_LEAD = /^(?:i (?:have|'ve got|got|'ve|am going to|'m going to|'ll be at|need to be at|have got)|i'?ve got|there(?:'s| is)|we have|(?:add|put|schedule|book)(?: an?)?(?: event| appointment)?:?)\s+/i;
+  function eventOf(s, today) {
+    if (/^(?:i )?(?:had|went|did|got back|finished|was|attended|left|came back)\b/i.test(s)) return null; // past: a report, not an event
+    if (/^(?:i (?:need|have) to|i should|remind me|i gotta)\b/i.test(s)) return null; // a task with a time is a task
+    const t = s.replace(/\b([ap])\.?\s?m\.?(?=\W|$)/gi, '$1m');
+    const clock = eventClock(t);
+    if (!clock || (!EVENT_LEAD.test(t) && !EVENT_WORDS.test(t))) return null;
+    let date = /\btonight\b/i.test(t) ? today : pullDay(t, today) || today;
+    const wd = (t.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i) || [])[1];
+    if (wd && WEEKDAYS.indexOf(wd.toLowerCase()) === new Date(`${today}T12:00:00`).getDay() && !/\bnext\b/i.test(t)) date = today; // "Friday" said on a Friday
+    const title = t.replace(clock.text, ' ')
+      .replace(/\b(?:today|tonight|tomorrow|this (?:morning|afternoon|evening)|in the (?:morning|afternoon|evening)|(?:on |this |next )?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)|(?:on )?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.? \d{1,2}(?:st|nd|rd|th)?|(?:on )?\d{1,2}\/\d{1,2}|on the \d{1,2}(?:st|nd|rd|th))\b/gi, ' ')
+      .replace(EVENT_LEAD, '').replace(/^\s*(?:a|an|my|the|to)\s+/i, '').replace(/\s+(?:at|on|from|for|in the|this)\s*$/i, '').replace(/\s+/g, ' ').trim();
+    if (!title) return null;
+    const hm = (x) => `${p2(Math.floor(x / 60) % 24)}:${p2(x % 60)}`;
+    return `event: ${title.charAt(0).toUpperCase() + title.slice(1)} | ${date} ${hm(clock.start)}-${hm(clock.end)} | confirmed`;
+  }
+
   /** "for 2 hours", "an hour and a half", "90 minutes" → minutes, or null. */
   function pullMinutes(low) {
     const NUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
@@ -339,6 +381,9 @@
 
       const l = laundry(s);
       if (l) { out.commands.push(l); continue; }
+
+      const ev = eventOf(s, today);
+      if (ev) { out.commands.push(ev); continue; }
 
       if ((m = s.match(/^(?:add|put|new task)\b:?\s*(?:a task (?:to|for)\s+)?(.*?)(?:\s+(?:to|on) (?:the|my) (?:list|to-?do(?: list)?))?$/i)) || (m = s.match(/^(?:i need to|i have to|i should|i gotta|remind me to)\s+(.*)$/i))) {
         const { rest, date } = pullDate(m[1], today);

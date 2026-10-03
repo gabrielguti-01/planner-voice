@@ -188,6 +188,9 @@
   ul li::before { content:""; position:absolute; left:6px; top:17px; width:8px; height:2px; background:var(--p); box-shadow:0 0 8px var(--p); }
 
   .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .step-actions, .confirm { margin-top:14px; }
+  .confirm p { margin:0 0 10px; font-size:15px; line-height:1.35; }
+  #screen .step-actions button, #screen .confirm button { padding:13px 6px; }
   button { font:700 12px/1 var(--display); letter-spacing:.18em; text-transform:uppercase; color:var(--p); background:rgba(var(--p-rgb),.06); border:1px solid rgba(var(--p-rgb),.32);
     padding:15px 14px; min-height:50px; cursor:pointer; flex:1 1 auto; clip-path:polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut)); transition:background .2s, box-shadow .2s, color .2s; }
   button:hover { background:rgba(var(--p-rgb),.14); }
@@ -578,6 +581,14 @@
   <section class="card primary-panel" aria-live="polite">
     <h2>Next action</h2>
     <div id="say">…</div>
+    <div class="row step-actions hidden" id="stepActions">
+      <button id="doneBtn" class="primary">Done</button>
+      <button id="skipBtn">Skip</button>
+    </div>
+    <div class="confirm hidden" id="confirmBox">
+      <p id="confirmText"></p>
+      <div class="row"><button id="confirmYes" class="primary">Yes</button><button id="confirmNo">No</button></div>
+    </div>
   </section>
 
   <div class="row">
@@ -602,9 +613,9 @@
  <div id="drawer" class="hidden">
   <div class="row" style="margin-top:6px"><button id="recheck">Recheck the order</button><button id="checkin">Check in</button></div>
   <section class="card">
-    <label for="typed" style="margin-top:0">Manual input</label>
+    <label for="typed" style="margin-top:0">Type an event (or anything else)</label>
     <div class="row">
-      <input id="typed" type="text" placeholder="I did the dishes · can I go for 2 hours?" autocomplete="off">
+      <input id="typed" type="text" placeholder="Dentist Friday at 3 PM · or anything else" autocomplete="off">
       <button id="typedGo" style="flex:0 0 auto">Send</button>
     </div>
   </section>
@@ -747,14 +758,14 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261003b"></script>
+<script src="speech.js?v=20261003c"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
   const { toCommands, parseNext } = PlannerSpeech;
   const MOCK = new URLSearchParams(location.search).has('mock');
   const store = { get: (k, d = '') => { try { return localStorage.getItem('planner.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('planner.' + k, v); } catch {} } };
-  let next = null, pendingLines = [], lastSpoken = '', lastHandled = null;
+  let next = null, pendingLines = [], lastSpoken = '', lastHandled = null, confirmKind = null; // confirmKind: the Done/Skip question that is open
   const closedIds = new Set(); let sendSeq = 0; // steps closed here that the planner hasn't caught up with yet
   const stale = (fresh) => (fresh.tasks || []).some((id) => closedIds.has(id));
   const MODES = { idle: 'ONLINE', listening: 'LISTENING', speaking: 'SPEAKING', saving: 'SYNCING' };
@@ -1023,6 +1034,9 @@
       shown = (m ? m[1] : shown) + ' Then: ' + next.then.charAt(0).toLowerCase() + next.then.slice(1) + '.' + (m && m[2] ? m[2] : '');
     }
     $('say').textContent = shown;
+    const canMark = !!(next.tasks && next.tasks.length);
+    if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
+    $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
     drawDay();
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
@@ -1188,6 +1202,30 @@
     finally { $('send').disabled = false; }
   }
   $('send').onclick = send;
+  // ---------- Done / Skip buttons: one tap, then "are you sure?", then Yes (for when talking out loud isn't an option) ----------
+  const closeConfirm = () => { confirmKind = null; $('confirmBox').classList.add('hidden'); $('stepActions').classList.toggle('hidden', !(next?.tasks || []).length); };
+  function askStep(kind) {
+    if (!next?.tasks?.length) { status('There is no step to mark right now.', 'warn'); return; }
+    confirmKind = kind;
+    const name = next.step || (next.say || '').replace(/^(?:Saved\. )?Next: /, '').replace(/[.]\s.*$/, '');
+    $('confirmText').textContent = kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
+    $('confirmYes').textContent = kind === 'done' ? 'Yes, done' : 'Yes, skip';
+    $('stepActions').classList.add('hidden');
+    $('confirmBox').classList.remove('hidden');
+  }
+  $('doneBtn').onclick = () => askStep('done');
+  $('skipBtn').onclick = () => askStep('skip');
+  $('confirmNo').onclick = closeConfirm;
+  $('confirmYes').onclick = async () => {
+    const kind = confirmKind;
+    if (!kind || !next?.tasks?.length) return closeConfirm();
+    pendingLines = [`${kind}: ${next.tasks.join(', ')}`];
+    lastHandled = { closesCurrent: true };
+    closeConfirm();
+    $('stepActions').classList.add('hidden');
+    await send();
+    lastHandled = null;
+  };
   $('cancel').onclick = () => { pendingLines = []; $('pending').classList.add('hidden'); };
   $('typedGo').onclick = () => { const v = $('typed').value.trim(); if (v) { $('typed').value = ''; handle(v); } };
   $('typed').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('typedGo').click(); });
@@ -1247,6 +1285,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261003b"></script>
+<script src="music.js?v=20261003c"></script>
 </body>
 </html>

@@ -79,6 +79,7 @@
     if (/\b(?:all (?:of )?)?(?:the |my )?sheets (?:are|is) (?:all )?in the dryer\b/i.test(s)) return 'laundry: sheets dryer';
     if ((m = s.match(new RegExp(`\\b(?:moved|put|transferred|switched)\\s+${LOAD}\\s+(?:in|into|to|over to)\\s+the dryer`, 'i')))) return `laundry: ${normLoad(m[1])} dryer`;
     if ((m = s.match(new RegExp(`\\b(?:started|put|threw)\\s+${LOAD}\\s+(?:in|into)\\s+the (?:washer|wash)`, 'i')))) return `laundry: ${normLoad(m[1])} washer`;
+    if (/\b(?:started|put in|threw in|put)\s+(?:the next|another|the other)\s+load\b/i.test(s)) return 'laundry: next washer';
     if ((m = s.match(/\b(?:started|put in|threw in)\s+a(?: new)? load(?: of ([a-z ]+?))?(?: in the (?:washer|wash))?$/i))) return `laundry: new ${(m[1] || 'clothes').trim()} washer`;
     if ((m = s.match(new RegExp(`\\b(?:took|pulled|unloaded)\\s+${LOAD}\\s+out(?: of the dryer)?`, 'i')))) return `laundry: ${normLoad(m[1]).replace('washer', 'dryer')} basket`;
     if ((m = s.match(new RegExp(`\\b(?:put|folded and put)\\s+${LOAD}\\s+away`, 'i')))) return `laundry: ${normLoad(m[1]).replace('washer', 'all')} away`;
@@ -87,7 +88,7 @@
     return null;
   }
 
-  const DONE_VERBS = 'did|finished|completed|took|fed|brushed|scooped|ate|had|washed|cleaned|called|sent|paid|swept|showered|shaved|mopped|vacuumed|emailed|bought|submitted|uploaded|studied|watered|made|drank|filled|organized|folded|checked|refilled|clipped|put on|picked up|dropped off|talked to';
+  const DONE_VERBS = 'turned in|handed in|did|finished|completed|took|fed|brushed|scooped|ate|had|washed|cleaned|called|sent|paid|swept|showered|shaved|mopped|vacuumed|emailed|bought|submitted|uploaded|studied|watered|made|drank|filled|organized|folded|checked|refilled|clipped|put on|picked up|dropped off|talked to';
 
   /**
    * @param {string} said    transcript
@@ -144,7 +145,7 @@
         out.commands.push(`series: ${m[1].replace(/ (?:every|on)$/i, '')} | every ${schedule(m[2])}`); continue;
       }
       if ((m = s.match(/^i (?:just )?(?:had|ate) (?:a |an |my )?(steak|smoothie|sandwich(?:es)?|\d+ sandwich(?:es)?)(?: for \w+)?$/i))) { out.commands.push(`ate: ${m[1].toLowerCase()}`); continue; }
-      if ((m = s.match(/^(?:do|put|make) (.+?) (?:first|my (?:number one|top|first) (?:priority|thing))(?: after (?:the )?laundry)?$/i))) { out.commands.push(`first: ${m[1].replace(/^the\s+/i, '')}`); continue; }
+      if ((m = s.match(/^(?:do|put|make) (.+?) (?:first|my (?:number one|top|first) (?:priority|thing))(?: after (?:the )?laundry)?( tomorrow)?$/i))) { out.commands.push(`first: ${m[1].replace(/^the\s+/i, '').replace(/ tomorrow$/i, '')}${m[2] || / tomorrow$/i.test(m[1]) ? ' | tomorrow' : ''}`); continue; }
       if (/^what'?s (?:my|the) plan\b|^(?:what does|how does) (?:my|the) day look|^plan (?:out )?(?:my|the) day|^today'?s plan/.test(low)) { out.action = 'plan'; continue; }
       if (/^what'?s left|^day list|^what(?:'s| is) (?:still )?(?:open|remaining)/.test(low)) { out.action = 'list'; continue; }
       if (/^week ahead|^what'?s coming up|^what(?:'s| is) (?:this|the) week/.test(low)) { out.action = 'week'; continue; }
@@ -174,7 +175,9 @@
       }
       if ((m = s.match(/^(?:note|remember|remind me)(?: that| about)?\s+(.*)$/i))) { out.commands.push(`note: ${m[1]}`); continue; }
 
-      if ((m = s.match(/^(?:i(?:'ve| have)? |just |i just |already )?(?:started|began|am starting|i'?m starting|i'?m working on|working on)\s+(.*)$/i))) { out.commands.push(`started: ${m[1]}`); continue; }
+      if ((m = s.match(/^(?:i(?:'ve| have)? |just |i just |already )?(?:started|began|am starting|i'?m starting|i'?m working on|working on|worked on|i worked on|i'?ve been working on|made progress on|did some(?: work on)?)\s+(.*)$/i))) { out.commands.push(`started: ${m[1].replace(/\s+(?:today|for (?:today|now|a while))$/i, '')}`); continue; }
+      if ((m = s.match(/^(?:i(?:'ve| have)? |i just |i )?(?:finished|done with|stopped|wrapped up) (?:the |my )?(.+?) for (?:today|now|the day|tonight)$/i))) { out.commands.push(`started: ${m[1]} | note session done ${today}`); continue; }
+      if ((m = s.match(/^i (?:just )?put (?:the |my )?(groceries|food|shopping) away$/i))) { out.commands.push('done: put the groceries away'); continue; }
 
       if ((m = s.match(new RegExp(`^(?:i(?:'ve| have)? |just |i just |i already |already )?(?:just |already )?((?:${DONE_VERBS})\\b.*)$`, 'i')))) {
         let what = m[1].replace(/^(?:did|finished|completed)\s+(?:the\s+|my\s+)?/i, '');

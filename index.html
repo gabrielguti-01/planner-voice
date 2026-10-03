@@ -79,7 +79,7 @@
   body[data-state="saving"]    { --spin:.4; }
   * { box-sizing:border-box; }
   html, body { margin:0; min-height:100%; background:var(--bg); color:var(--ink); font:500 18px/1.4 var(--body); -webkit-font-smoothing:antialiased; }
-  body { background: var(--bg); }
+  body { background: none; } /* the page colour is on html; the body stays clear so the fixed #bg layer shows */
   /* the background is its own fixed layer, so it never drifts against the panels while scrolling (iPhones ignore background-attachment: fixed) */
   #bg { position:fixed; top:0; left:0; right:0; height:100vh; height:100lvh; z-index:-1; pointer-events:none; background: var(--backdrop), var(--bg); }
   body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:5;

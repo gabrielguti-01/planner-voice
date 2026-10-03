@@ -29,6 +29,35 @@
     return { rest: text, date: null };
   }
 
+  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  /** A calendar day in "October 8", "Oct 8th", "10/8", "the 8th" or "Tuesday" → YYYY-MM-DD (never in the past), or null. */
+  function pullDay(t, today) {
+    const y = +today.slice(0, 4), m0 = +today.slice(5, 7);
+    const fix = (mo, d) => { let out = `${y}-${pad(mo)}-${pad(d)}`; if (out < today && mo < m0) out = `${y + 1}-${pad(mo)}-${pad(d)}`; return out; };
+    let m = t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
+    if (m) return fix(MONTHS.indexOf(m[1].toLowerCase()) + 1, +m[2]);
+    if ((m = t.match(/\b(\d{1,2})\/(\d{1,2})\b/))) return fix(+m[1], +m[2]);
+    if ((m = t.match(/\bthe (\d{1,2})(?:st|nd|rd|th)\b/i))) { const d = +m[1]; return +today.slice(8) <= d ? `${today.slice(0, 8)}${pad(d)}` : fix(m0 === 12 ? 1 : m0 + 1, d); }
+    if ((m = t.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday|today|tomorrow)\b/i))) return pullDate(`on ${m[1]}`, today).date;
+    return null;
+  }
+  const NUMW = { no: 0, none: 0, zero: 0, a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  const num = (w) => (w == null ? null : NUMW[w.toLowerCase()] ?? (/^\d+$/.test(w) ? +w : null));
+  const FRAC = (w) => (!w ? '0' : /half/i.test(w) ? '1/2' : /three.quarter/i.test(w) ? '3/4' : /quarter/i.test(w) ? '1/4' : /third/i.test(w) ? '1/3' : (w.match(/\d\/\d/) || ['0'])[0]);
+  const WD3 = { sunday: 'Sun', monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat' };
+  /** "Mondays and Thursdays", "weekdays", "every day", "every 2 or 3 days", "the 1st to the 5th" → the definitions' every:: form. */
+  function schedule(t) {
+    const low = t.toLowerCase();
+    if (/\b(every ?day|daily)\b/.test(low)) return 'daily';
+    if (/\bweekdays\b/.test(low)) return 'Mon-Fri';
+    if (/\bweekends?\b/.test(low)) return 'Sat-Sun';
+    let m = low.match(/every (\d+|two|three|four|five) (?:to|or|-) (\d+|two|three|four|five|six|seven) days/);
+    if (m) return `${num(m[1])}-${num(m[2])} days`;
+    if ((m = low.match(/(?:the )?(\d{1,2})(?:st|nd|rd|th) (?:to|through|-) (?:the )?(\d{1,2})(st|nd|rd|th)/))) return `${m[1]}${['th', 'st', 'nd', 'rd'][+m[1] % 10 < 4 && (+m[1] < 11 || +m[1] > 13) ? +m[1] % 10 : 0]}-${m[2]}${m[3]}`;
+    const days = Object.keys(WD3).filter((d) => new RegExp(`\\b${d}s?\\b`).test(low)).map((d) => WD3[d]);
+    return days.length ? days.join(', ') : null;
+  }
+
   /** "for 2 hours", "an hour and a half", "90 minutes" → minutes, or null. */
   function pullMinutes(low) {
     const NUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
@@ -84,9 +113,39 @@
       if ((m = s.match(/^(?:please )?(?:add|put) (.+?) (?:to|on) (?:the |my )?(?:grocery|shopping) list$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^(?:we'?re|i'?m|we are|i am)\s+(?:almost |nearly |running )?(?:out of|low on) (.+)$/i)) || (m = s.match(/^(?:we|i)\s+(?:ran out of|are out of|need to buy|need to get) (?:more |some |new )?(.+)$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^i (?:had to )?(?:threw|throw|tossed) (?:out |away )?(.+?)(?: out| away)?$/i))) { out.commands.push(`waste: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
+      // a printed date on what was bought: "I bought 2 packs of bread, use by October 8"
+      if ((m = s.match(/^i (?:just )?bought (.+?),?\s+(?:that'?s |it'?s |they'?re )?(?:use by|best by|good until|expires?(?: on)?|expiring)\s+(.+)$/i)) && pullDay(m[2], today)) { out.commands.push(`bought: ${m[1].replace(/\s+and\s+/gi, '; ')} use by ${pullDay(m[2], today)}`); continue; }
       if ((m = s.match(/^i (?:just )?bought (.+)$/i))) { out.commands.push(`bought: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
+      // avocado ripeness: "I have 2 ripe avocados and 3 green ones" / "avocados: 2 ripe, 3 green"
+      if (/\bavocados?\b/i.test(s) && (m = s.match(/\b(\d+|no|one|two|three|four|five|six|seven|eight) (?:are |is )?ripe\b/i))) {
+        const g = s.match(/\b(\d+|no|one|two|three|four|five|six|seven|eight) (?:are |is )?(?:green|firm|hard|unripe|not ripe)\b/i);
+        out.commands.push(`avocado: ${num(m[1])} ripe ${g ? num(g[1]) : 0} green`); continue;
+      }
+      // a substitution: "I'll have chicken instead of a steak this week"
+      if ((m = s.match(/^(?:i'?ll|i will|i'?m going to|i'?m gonna|i am going to|i'?m) (?:have|eat|make|use|get) (.+?) instead of (?:(\d+|a|an|one|two|three) )?(steaks?|sandwich(?:es)?|kiwis?|avocados?|pineapples?)(?: this week)?$/i))) { out.commands.push(`substitute: ${m[1]} for ${num(m[2]) || 1} ${m[3].toLowerCase()}`); continue; }
+      // a blueberry checkpoint: "1 full bag of blueberries and half a bag open"
+      if (/\bblueberr/i.test(s) && (m = s.match(/\b(\d+|no|one|two|three|four) full\b/i))) {
+        const o = s.match(/\b(half|a quarter|three quarters|a third|\d\/\d)\b(?:[^.]*?)\bopen\b|\bopen (?:bag )?(?:is |at |about )?(half|a quarter|three quarters|a third|\d\/\d)/i);
+        out.commands.push(`blueberries: ${num(m[1])} full ${FRAC(o && (o[1] || o[2]))} open`); continue;
+      }
+      // exam readiness (school §5): "I feel partly ready for the chem exam"
+      if ((m = s.match(/^(?:i (?:feel|am|think i'?m)|i'?m|feeling) (not(?: at all)?|not really|partly|kind of|somewhat|mostly|half|pretty|fully|totally|very)? ?(?:ready|prepared) for (?:the |my )?(.*\b(?:exam|quiz|test|midterm|final)\b.*)$/i))) {
+        const w = (m[1] || '').toLowerCase(), r = /^not/.test(w) ? 'unprepared' : /partly|kind of|somewhat|mostly|half/.test(w) ? 'partly' : 'prepared';
+        out.commands.push(`set: ${m[2]} | ready ${r}`); continue;
+      }
+      // a recurring item changed from now on: "from now on the gym is Mondays, Wednesdays and Fridays", "stop the pool filter from now on"
+      if ((m = s.match(/^(?:stop|no more) (?:the |my |doing )?(.+?) (?:from now on|for good|permanently|altogether|going forward)$/i)) || (m = s.match(/^stop repeating (?:the |my )?(.+)$/i))) { out.commands.push(`series: ${m[1]} | stop`); continue; }
+      if ((m = s.match(/^(?:from now on|going forward),? (?:do |have |put |make )?(?:the |my )?(.+?) (?:only )?(after|before) (\d{1,2})(?::(\d{2}))? ?([ap]\.?m\.?)?$/i))) {
+        let h = +m[3]; if (/^p/i.test(m[5] || '') && h < 12) h += 12; if (/^a/i.test(m[5] || '') && h === 12) h = 0;
+        const t = `${pad(h)}:${m[4] || '00'}`;
+        out.commands.push(`series: ${m[1]} | window ${/after/i.test(m[2]) ? `after ${t}` : `00:00-${t}`}`); continue;
+      }
+      if (((m = s.match(/^(?:from now on,? |going forward,? )(?:do |have |put |make |move )?(?:the |my )?(.+?) (?:is |are |goes |go |happens |should be |on |every |to )+(.+)$/i)) || (m = s.match(/^(?:change|make|move|set|switch) (?:the |my )?(.+?) to (?:every |be every |be on |on )?(.+?)(?: from now on| going forward)?$/i))) && schedule(m[2]) && (/from now on|going forward|every|daily|weekdays|weekends|\b(?:sun|mon|tues|wednes|thurs|fri|satur)days\b/i.test(s))) {
+        out.commands.push(`series: ${m[1].replace(/ (?:every|on)$/i, '')} | every ${schedule(m[2])}`); continue;
+      }
       if ((m = s.match(/^i (?:just )?(?:had|ate) (?:a |an |my )?(steak|smoothie|sandwich(?:es)?|\d+ sandwich(?:es)?)(?: for \w+)?$/i))) { out.commands.push(`ate: ${m[1].toLowerCase()}`); continue; }
       if ((m = s.match(/^(?:do|put|make) (.+?) (?:first|my (?:number one|top|first) (?:priority|thing))(?: after (?:the )?laundry)?$/i))) { out.commands.push(`first: ${m[1].replace(/^the\s+/i, '')}`); continue; }
+      if (/^what'?s (?:my|the) plan\b|^(?:what does|how does) (?:my|the) day look|^plan (?:out )?(?:my|the) day|^today'?s plan/.test(low)) { out.action = 'plan'; continue; }
       if (/^what'?s left|^day list|^what(?:'s| is) (?:still )?(?:open|remaining)/.test(low)) { out.action = 'list'; continue; }
       if (/^week ahead|^what'?s coming up|^what(?:'s| is) (?:this|the) week/.test(low)) { out.action = 'week'; continue; }
       if (/^(?:can|should|could|may) i (?:go|hang|leave|take|join|head)|\bdo i have time\b|\bam i free\b|\bbeen invited\b|^how (?:much )?(?:free )?time do i have|^how(?:'s| is) (?:my )?pressure|^is it ok(?:ay)? (?:if i|to) (?:go|hang)/.test(low)) {
@@ -145,6 +204,8 @@
     const after = section('After that').split('\n').filter((l) => /^\d+\./.test(l)).map((l) => clean(l.replace(/^\d+\.\s*/, '').split(' — ')[0]));
     const bullets = (name) => section(name).split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2)));
     return {
+      plan: section("Today's plan").split('**Not today:**')[0].split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
+      notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
       say: section('Say this'), after, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), late: bullets('Late or waiting'), groceries: bullets('Groceries'),

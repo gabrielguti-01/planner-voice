@@ -611,6 +611,7 @@
 
   <section class="card hidden" id="attentionCard"><h2>Alert</h2><ul id="attention"></ul></section>
   <details class="card" id="afterBox"><summary>After this one</summary><ol id="after"></ol></details>
+  <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
   <details class="card hidden" id="groceryBox"><summary>Grocery list</summary><ul id="groceries"></ul></details>
@@ -1030,6 +1031,8 @@
     fill('after', next.after, 'Nothing queued.');
     $('afterBox').open = false; // one thing at a time: the rest stays folded until asked for
     $('afterBox').classList.toggle('hidden', !$('showList').checked); // and the full order is hidden unless switched on
+    fill('plan', [...(next.plan || []), ...(next.notToday || []).map((x) => 'Not today: ' + x)], '');
+    $('planBox').classList.toggle('hidden', !(next.plan || []).length);
     fill('today', next.today, 'All done.');
     fill('week', next.week, 'Nothing dated.');
     fill('attention', next.attention, '');
@@ -1128,6 +1131,7 @@
     if (action === 'recheck') return recheck();
     if (action === 'groceries') { drawer(true); $('groceryBox').open = true; const g = (next?.groceries || []).filter((x) => !/^_/.test(x)); speak(g.length ? 'On the grocery list: ' + g.map((x) => x.replace(/ \(.*\)$/, '')).join('. ') + '.' : 'The grocery list is empty.'); return; }
     if (action === 'free') { const a = PlannerSpeech.freeAnswer(next.pressure, MOCK ? '2026-10-01 15:00' : localNow(), minutes ?? null); status(a); speak(a); return; }
+    if (action === 'plan') { drawer(true); $('planBox').open = true; const p = (next?.plan || []).filter((x) => !/^_/.test(x)).slice(0, 4).map((x) => x.replace(/^~?(\d{2}):(\d{2}): /, (m, h, mm) => `around ${clockText(new Date('2000-01-01T' + h + ':' + mm).getTime())}, `).replace(/^now: /, 'Now, ').replace(/^at (\d{2}):(\d{2}): /, (m, h, mm) => `at ${clockText(new Date('2000-01-01T' + h + ':' + mm).getTime())}, `).replace(/^later: /, 'Later: ')); speak(p.length ? p.join('. ') + '.' : 'Nothing is planned for the rest of today.'); return; }
     if (action === 'list') { drawer(true); $('todayBox').open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
     else if (action === 'week') { drawer(true); $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }
     else refresh().then(() => speak(next?.say));

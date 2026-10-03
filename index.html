@@ -188,6 +188,9 @@
   ul li::before { content:""; position:absolute; left:6px; top:17px; width:8px; height:2px; background:var(--p); box-shadow:0 0 8px var(--p); }
 
   .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .mu-help, .mu-diag { margin:10px 0 0; padding-left:20px; font-size:14px; line-height:1.45; }
+  .mu-help li, .mu-diag li { margin:0 0 8px; }
+  .mu-diag li.ok::marker { content:'✓  '; } .mu-diag li.bad::marker { content:'✗  '; } .mu-diag li.tip::marker { content:'→  '; }
   .step-actions, .confirm { margin-top:14px; }
   .confirm p { margin:0 0 10px; font-size:15px; line-height:1.35; }
   #screen .step-actions button, #screen .confirm button { padding:13px 6px; }
@@ -723,7 +726,7 @@
   <div id="muConnect" class="card">
     <h2>Spotify</h2>
     <p class="meta" style="margin:0 0 12px">Connect once to control the Spotify that is playing on your phone or computer from here. Needs Spotify Premium. The login stays in this browser.</p>
-    <div class="row"><button id="muLogin" class="primary">Connect Spotify</button></div>
+    <div class="row"><button id="muLogin" class="primary">Connect Spotify</button><button id="muCheck1" class="mu-small">Check Spotify</button></div>
   </div>
 
   <div id="muBody" class="hidden">
@@ -752,13 +755,26 @@
       <div id="muList"></div>
     </div>
 
-    <div class="row" style="margin-top:14px"><button id="muOut" class="mu-small">Disconnect Spotify</button></div>
+    <div class="row" style="margin-top:14px"><button id="muCheck" class="mu-small">Check Spotify</button><button id="muOut" class="mu-small">Disconnect Spotify</button></div>
   </div>
+  <div class="card hidden" id="muDiag"><h2>Spotify check</h2><ul id="muDiagList" class="mu-diag"></ul></div>
+  <details class="card" id="muHelp">
+    <summary>Spotify says "offline"?</summary>
+    <ol class="mu-help">
+      <li>In <b>Spotify</b>: tap your picture → <b>Settings and privacy</b> → <b>Playback</b> → turn <b>Offline mode</b> off.</li>
+      <li>iPhone <b>Settings</b> → <b>Spotify</b> → turn on <b>Cellular Data</b> and <b>Background App Refresh</b>.</li>
+      <li>Turn off any <b>VPN</b> or <b>ad blocker</b> (Settings → VPN, and Settings → General → VPN &amp; Device Management).</li>
+      <li>Settings → <b>Screen Time</b>: make sure Spotify has no App Limit and isn't blocked by Downtime.</li>
+      <li>Settings → General → <b>Date &amp; Time</b> → Set Automatically on (a wrong clock breaks secure connections).</li>
+      <li>Still offline: in Spotify, <b>Log out</b> and log back in. Last resort: Settings → General → iPhone Storage → Spotify → <b>Offload App</b>, then tap it again to reinstall.</li>
+      <li>Then open Spotify, play any song for a few seconds, come back here and tap <b>Check Spotify</b>.</li>
+    </ol>
+  </details>
   <p class="meta" id="muStatus" style="text-align:center;margin-top:12px"></p>
  </div>
 </section>
 
-<script src="speech.js?v=20261003c"></script>
+<script src="speech.js?v=20261003d"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1285,6 +1301,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261003c"></script>
+<script src="music.js?v=20261003d"></script>
 </body>
 </html>

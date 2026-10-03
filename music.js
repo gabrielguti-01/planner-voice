@@ -65,7 +65,7 @@
     let j = null; try { j = text ? JSON.parse(text) : null; } catch {}
     if (!r.ok) {
       const reason = j?.error?.reason || '', msg = j?.error?.message || '';
-      if (reason === 'NO_ACTIVE_DEVICE' || /no active device/i.test(msg)) throw new Error('Open Spotify on your phone or computer first, then choose it under Device.');
+      if (reason === 'NO_ACTIVE_DEVICE' || /no active device/i.test(msg)) throw new Error('Open Spotify on your phone and play any song for a few seconds, then choose it under Device. If Spotify says "offline", tap Check Spotify below.');
       if (reason === 'PREMIUM_REQUIRED') throw new Error('Spotify says this needs Premium.');
       if (r.status === 429) throw new Error('Spotify is asking to slow down. Try again in a moment.');
       throw new Error(msg || 'Spotify answered ' + r.status + '.');
@@ -192,6 +192,40 @@
     } catch (e) { note(e.message, true); }
   }
 
+  // ---------------------------------------------------------------- "Check Spotify": where does it break?
+  async function check() {
+    const list = $('muDiagList'), box = $('muDiag');
+    if (!list || !box) return;
+    box.classList.remove('hidden'); list.innerHTML = '';
+    const say = (cls, text) => { const li = document.createElement('li'); li.className = cls; li.textContent = text; list.append(li); return cls !== 'bad'; };
+    const help = () => { if ($('muHelp')) $('muHelp').open = true; };
+    say('tip', 'Checking…');
+    const done = () => { if (list.firstChild && list.firstChild.textContent === 'Checking…') list.firstChild.remove(); };
+    if (MOCK) { done(); say('ok', 'Internet: working (demo).'); say('ok', 'Spotify servers: reachable (demo).'); say('ok', 'Signed in (demo).'); say('ok', 'Spotify sees: iPhone (demo).'); return; }
+    // 1. internet
+    if (navigator.onLine === false) { done(); say('bad', 'This phone has no internet connection right now. Turn on Wi-Fi or Cellular Data, then check again.'); return; }
+    done(); say('ok', 'Internet: this phone is online.');
+    // 2. Spotify's servers (an opaque request: it only tells whether the server can be reached at all)
+    try { await fetch('https://api.spotify.com/v1/', { mode: 'no-cors', cache: 'no-store' }); say('ok', 'Spotify servers: reachable from this phone.'); }
+    catch { say('bad', 'This phone cannot reach Spotify at all. A VPN or an ad blocker is the usual cause: turn it off and check again.'); help(); return; }
+    // 3. sign-in
+    if (!connected()) { say('bad', 'This app is not connected to your Spotify account yet. Tap Connect Spotify (inside this app). If the sign-in finishes in Safari instead, come back to this app and tap Connect once more.'); return; }
+    let devs;
+    try { devs = (await api('/me/player/devices')).devices || []; say('ok', 'Signed in to your Spotify account.'); }
+    catch (e) { say('bad', e.message + ' Tap Disconnect Spotify, then Connect Spotify again.'); return; }
+    // 4. the Spotify app itself: it must be online and signed in to show up as a device
+    if (!devs.length) {
+      say('bad', 'Spotify can\'t see any of your devices. That means the Spotify app itself is offline (or closed). Use the steps below, then open Spotify, play a song for a few seconds, and check again.');
+      help(); return;
+    }
+    const phone = devs.find((d) => /smartphone/i.test(d.type || ''));
+    say('ok', 'Spotify sees: ' + devs.map((d) => d.name + (d.is_active ? ' (playing)' : '')).join(', ') + '.');
+    if (!phone) { say('bad', 'Your phone is not on that list, so the Spotify app on this phone is offline or asleep. Open Spotify on the phone and play something; if it says "offline", use the steps below.'); help(); return; }
+    if (!devs.some((d) => d.is_active)) say('tip', 'Nothing is playing yet: choose ' + phone.name + ' under Device, then press Play.');
+    else say('ok', 'Everything works. Use the controls above.');
+    devices();
+  }
+
   // ---------------------------------------------------------------- panel
   function setOpen(on) {
     open = on;
@@ -226,6 +260,7 @@
     $('muClose').onclick = () => setOpen(false);
     $('muLogin').onclick = () => (MOCK ? note('Demo mode: sign-in is skipped.') : login().catch((e) => note(e.message, true)));
     $('muOut').onclick = disconnect;
+    for (const id of ['muCheck', 'muCheck1']) if ($(id)) $(id).onclick = () => check().catch((e) => note(e.message, true));
     $('muPlay').onclick = () => act(() => put(playing() ? '/me/player/pause' : '/me/player/play'));
     $('muNext').onclick = () => act(() => post('/me/player/next'));
     $('muPrev').onclick = () => act(() => post('/me/player/previous'));

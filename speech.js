@@ -83,6 +83,7 @@
       if (/^(?:read me |what'?s on |what is on |show me )?(?:the |my )?(?:grocery|shopping) list\b|^what do i need (?:to buy|from the store)/.test(low)) { out.action = 'groceries'; continue; }
       if ((m = s.match(/^(?:please )?(?:add|put) (.+?) (?:to|on) (?:the |my )?(?:grocery|shopping) list$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^(?:we'?re|i'?m|we are|i am)\s+(?:almost |nearly |running )?(?:out of|low on) (.+)$/i)) || (m = s.match(/^(?:we|i)\s+(?:ran out of|are out of|need to buy|need to get) (?:more |some |new )?(.+)$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
+      if ((m = s.match(/^i (?:had to )?(?:threw|throw|tossed) (?:out |away )?(.+?)(?: out| away)?$/i))) { out.commands.push(`waste: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^i (?:just )?bought (.+)$/i))) { out.commands.push(`bought: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^i (?:just )?(?:had|ate) (?:a |an |my )?(steak|smoothie|sandwich(?:es)?|\d+ sandwich(?:es)?)(?: for \w+)?$/i))) { out.commands.push(`ate: ${m[1].toLowerCase()}`); continue; }
       if ((m = s.match(/^(?:do|put|make) (.+?) (?:first|my (?:number one|top|first) (?:priority|thing))(?: after (?:the )?laundry)?$/i))) { out.commands.push(`first: ${m[1].replace(/^the\s+/i, '')}`); continue; }

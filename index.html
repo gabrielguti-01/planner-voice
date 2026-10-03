@@ -613,6 +613,7 @@
   <details class="card" id="afterBox"><summary>After this one</summary><ol id="after"></ol></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
+  <details class="card hidden" id="groceryBox"><summary>Grocery list</summary><ul id="groceries"></ul></details>
   <details class="card" id="weekBox"><summary>Coming up this week</summary><ul id="week"></ul></details>
 
   <details class="card" id="settings">
@@ -1034,6 +1035,8 @@
     fill('attention', next.attention, '');
     $('attentionCard').classList.toggle('hidden', !next.attention.length);
     fill('late', next.late || [], '');
+    fill('groceries', next.groceries || [], '');
+    $('groceryBox').classList.toggle('hidden', !(next.groceries || []).length);
     $('lateBox').classList.toggle('hidden', !(next.late || []).length);
     if ($('drawer').classList.contains('hidden')) $('menu').textContent = next.attention.length ? 'More (' + next.attention.length + ')' : 'More';
   }
@@ -1123,6 +1126,7 @@
   $('recheck').onclick = recheck;
   function act(action, minutes) {
     if (action === 'recheck') return recheck();
+    if (action === 'groceries') { drawer(true); $('groceryBox').open = true; const g = (next?.groceries || []).filter((x) => !/^_/.test(x)); speak(g.length ? 'On the grocery list: ' + g.map((x) => x.replace(/ \(.*\)$/, '')).join('. ') + '.' : 'The grocery list is empty.'); return; }
     if (action === 'free') { const a = PlannerSpeech.freeAnswer(next.pressure, MOCK ? '2026-10-01 15:00' : localNow(), minutes ?? null); status(a); speak(a); return; }
     if (action === 'list') { drawer(true); $('todayBox').open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
     else if (action === 'week') { drawer(true); $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }

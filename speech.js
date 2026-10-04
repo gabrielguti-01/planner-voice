@@ -316,6 +316,11 @@
 
       // time outside is the Vitamin D (the user gets it from the sun)
       if (/^i (?:went|was|been|sat|walked|stepped|spent (?:some )?time|hung out) (?:outside|outdoors|out in the sun|in the sun)\b|^i (?:got|soaked up|caught|had) (?:some )?(?:sun|sunlight|sunshine)\b/i.test(s) && !/\b(?:trash|garbage|recycling)\b/i.test(s)) { out.commands.push('done: got some sun'); continue; }
+      // Baby Man's new bags of food
+      if (/\b(?:started|opened|open|start|cracked open|broke open|began)\b/i.test(s) && /\b(?:bags?|food)\b/i.test(s) && /\b(?:baby man|cat|purina|tender|kibble)\b/i.test(s)) {
+        const p = /purina/i.test(s), t = /tender/i.test(s);
+        out.commands.push(`opened: ${p && !t ? 'purina' : t && !p ? 'tender' : 'purina; tender'}`); continue;
+      }
       // the made smoothie
       if (/\bsmoothie\b/i.test(s) && /\b(?:fridge|refrigerator|refrigerated)\b/i.test(s)) { out.commands.push('smoothie: fridge'); continue; }
       if (/\bsmoothie\b/i.test(s) && /\b(?:threw|throw|tossed|toss|poured|pour|dumped|dump)\b|\bsmoothie\b.*\bwent bad\b/i.test(s)) { out.commands.push('smoothie: thrown out'); continue; }

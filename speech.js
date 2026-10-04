@@ -314,6 +314,8 @@
       const low = s.toLowerCase();
       let m;
 
+      // time outside is the Vitamin D (the user gets it from the sun)
+      if (/^i (?:went|was|been|sat|walked|stepped|spent (?:some )?time|hung out) (?:outside|outdoors|out in the sun|in the sun)\b|^i (?:got|soaked up|caught|had) (?:some )?(?:sun|sunlight|sunshine)\b/i.test(s) && !/\b(?:trash|garbage|recycling)\b/i.test(s)) { out.commands.push('done: got some sun'); continue; }
       // the workout, however it is said
       if (/^i (?:went to|hit|got back from) the gym$|^i (?:worked out|exercised|trained|did (?:my |a |the )?work ?out|finished (?:my |the )?work ?out)$/i.test(s)) { out.commands.push('done: gym'); continue; }
       // a machine that finished is not a report about a load: the planner says which load to move

@@ -192,6 +192,8 @@
   .mu-help li, .mu-diag li { margin:0 0 8px; }
   .mu-diag li.ok::marker { content:'✓  '; } .mu-diag li.bad::marker { content:'✗  '; } .mu-diag li.tip::marker { content:'→  '; }
   .step-actions, .confirm { margin-top:14px; }
+  .smoothie-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:14px; }
+  .smoothie-line button { flex:0 0 auto; padding:9px 12px; }
   .confirm p { margin:0 0 10px; font-size:15px; line-height:1.35; }
   #screen .step-actions button, #screen .confirm button { padding:13px 6px; }
   button { font:700 12px/1 var(--display); letter-spacing:.18em; text-transform:uppercase; color:var(--p); background:rgba(var(--p-rgb),.06); border:1px solid rgba(var(--p-rgb),.32);
@@ -584,6 +586,7 @@
   <section class="card primary-panel" aria-live="polite">
     <h2>Next action</h2>
     <div id="say">…</div>
+    <div class="smoothie-line hidden" id="smoothieLine"><span id="smoothieText"></span><button id="smoothieAlert" class="mu-small">Phone alert</button></div>
     <div class="row step-actions hidden" id="stepActions">
       <button id="doneBtn" class="primary">Done</button>
       <button id="skipBtn">Skip</button>
@@ -774,7 +777,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261003e"></script>
+<script src="speech.js?v=20261004a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1050,6 +1053,7 @@
       shown = (m ? m[1] : shown) + ' Then: ' + next.then.charAt(0).toLowerCase() + next.then.slice(1) + '.' + (m && m[2] ? m[2] : '');
     }
     $('say').textContent = shown;
+    smoothieClock();
     const canMark = !!(next.tasks && next.tasks.length);
     if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
     $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
@@ -1218,6 +1222,37 @@
     finally { $('send').disabled = false; }
   }
   $('send').onclick = send;
+  // ---------- the made smoothie: its time on screen, a spoken reminder while the app is open, and a phone alert ----------
+  let smoothieTimer = 0;
+  const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
+  function smoothieClock() {
+    const by = atLocal(next?.smoothieBy);
+    $('smoothieLine').classList.toggle('hidden', !(by > 0));
+    clearTimeout(smoothieTimer);
+    if (!(by > 0)) return;
+    const left = by - Date.now();
+    $('smoothieText').textContent = left > 0 ? `Smoothie: good until ${clockText(by)}${next.smoothieKept === 'fridge' ? ' (in the fridge)' : ''}` : 'Smoothie: past its safe time';
+    const warnAt = by - 20 * 60000, key = 'smoothieWarned:' + next.smoothieBy;
+    if (left > 0 && !store.get(key)) smoothieTimer = setTimeout(() => {
+      store.set(key, '1');
+      const t = `Finish your smoothie: it's good until ${clockText(by)}${next.smoothieKept === 'fridge' ? '' : ', or put it in the fridge'}.`;
+      status(t, 'warn'); if ($('autospeak').checked) speak(t);
+    }, Math.max(0, warnAt - Date.now()));
+  }
+  // a calendar event with an alarm: the phone itself reminds you, even with this app closed
+  $('smoothieAlert').onclick = () => {
+    const by = atLocal(next?.smoothieBy); if (!(by > 0)) return;
+    const p = (n) => String(n).padStart(2, '0');
+    const ics = (ms) => { const d = new Date(ms); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`; };
+    const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//To-Do//Smoothie//EN', 'BEGIN:VEVENT', `UID:smoothie-${by}@todo`, `DTSTAMP:${ics(Date.now())}`,
+      `DTSTART:${ics(by - 20 * 60000)}`, 'DURATION:PT20M', `SUMMARY:Finish your smoothie (good until ${clockText(by)})`,
+      'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', 'DESCRIPTION:Finish your smoothie, or put it in the fridge', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type: 'text/calendar' })); a.download = 'smoothie-reminder.ics';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    status('Opening your calendar: tap Add to get an alert 20 minutes before.');
+  };
+
   // ---------- Done / Skip buttons: one tap, then "are you sure?", then Yes (for when talking out loud isn't an option) ----------
   const closeConfirm = () => { confirmKind = null; $('confirmBox').classList.add('hidden'); $('stepActions').classList.toggle('hidden', !(next?.tasks || []).length); };
   function askStep(kind) {
@@ -1301,6 +1336,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261003e"></script>
+<script src="music.js?v=20261004a"></script>
 </body>
 </html>

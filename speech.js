@@ -316,6 +316,9 @@
 
       // time outside is the Vitamin D (the user gets it from the sun)
       if (/^i (?:went|was|been|sat|walked|stepped|spent (?:some )?time|hung out) (?:outside|outdoors|out in the sun|in the sun)\b|^i (?:got|soaked up|caught|had) (?:some )?(?:sun|sunlight|sunshine)\b/i.test(s) && !/\b(?:trash|garbage|recycling)\b/i.test(s)) { out.commands.push('done: got some sun'); continue; }
+      // the made smoothie
+      if (/\bsmoothie\b/i.test(s) && /\b(?:fridge|refrigerator|refrigerated)\b/i.test(s)) { out.commands.push('smoothie: fridge'); continue; }
+      if (/\bsmoothie\b/i.test(s) && /\b(?:threw|throw|tossed|toss|poured|pour|dumped|dump)\b|\bsmoothie\b.*\bwent bad\b/i.test(s)) { out.commands.push('smoothie: thrown out'); continue; }
       // the workout, however it is said
       if (/^i (?:went to|hit|got back from) the gym$|^i (?:worked out|exercised|trained|did (?:my |a |the )?work ?out|finished (?:my |the )?work ?out)$/i.test(s)) { out.commands.push('done: gym'); continue; }
       // a machine that finished is not a report about a load: the planner says which load to move
@@ -433,7 +436,7 @@
     return {
       plan: section("Today's plan").split('**Not today:**')[0].split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
-      made: field('made'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
+      made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
       say: section('Say this'), after, afterIds, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), late: bullets('Late or waiting'), groceries: bullets('Groceries'),
       then: ((section('Now').match(/^- Then: (.*)$/m) || [])[1] || '').trim(),

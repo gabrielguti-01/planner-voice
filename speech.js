@@ -324,7 +324,7 @@
       // a machine that finished is not a report about a load: the planner says which load to move
       if (/^(?:the )?(?:washer|dryer) (?:is|was|just)? ?(?:done|finished|ready|beeped|went off)$/i.test(s)) { out.action = out.action || 'next'; continue; }
       // "done" on its own: the step on screen is finished (its task IDs come from the screen)
-      if (isBareDone(s)) { if (cur.length) { out.commands.push(`done: ${cur.join(', ')}`); out.closesCurrent = true; } else out.action = out.action || 'next'; continue; }
+      if (isBareDone(s)) { if (cur.length) { out.commands.push(`done: ${cur.join(', ')}`); out.closesCurrent = true; out.bare = true; } else out.action = out.action || 'next'; continue; }
       if (isBareSkip(s) && cur.length) { out.commands.push(`skip: ${cur.join(', ')}`); out.closesCurrent = true; continue; }
 
       if (/^(?:what'?s|what is|whats) next|^next up|^what (?:now|should i do)|^check the repo|^start (?:my|the) day|^what do i (?:need|have) to do|^where do i start/.test(low)) { out.action = out.action || 'next'; continue; }

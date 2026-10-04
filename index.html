@@ -593,7 +593,7 @@
     </div>
     <div class="confirm hidden" id="confirmBox">
       <p id="confirmText"></p>
-      <div class="row"><button id="confirmYes" class="primary">Yes</button><button id="confirmNo">No</button></div>
+      <div class="row"><button id="confirmYes" class="primary">Yes</button><button id="confirmFridge" class="hidden">In the fridge</button><button id="confirmNo">No</button></div>
     </div>
   </section>
 
@@ -777,7 +777,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261004a"></script>
+<script src="speech.js?v=20261004b"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1025,7 +1025,7 @@
   let mockInbox = [];
 
   async function getNext() {
-    if (MOCK) return MOCK_NEXT;
+    if (MOCK) return globalThis.__MOCK_NEXT || MOCK_NEXT;
     const r = await api('state/next.md');
     if (!r.ok) throw new Error(r.status === 401 ? 'The token was refused. Check it in Settings.' : r.status === 404 ? 'Repository or file not found. Check Settings.' : `GitHub answered ${r.status}.`);
     return b64decode((await r.json()).content);
@@ -1134,6 +1134,7 @@
     // spoken words are checked against the words that matter right now; typed words are taken as written
     const r = toCommands(text, today(), { tasks: next?.tasks || [], step: next?.step || '', vocab: spoken ? PlannerSpeech.vocabFrom(next) : null });
     lastHandled = r;
+    if (r.bare && smoothieAsk()) { askStep('done'); if ($('autospeak').checked) speak('Did you finish it, or put it in the fridge?'); return; }
     if (!r.commands.length) return act(r.action, r.minutes);
     pendingLines = r.commands;
     $('heard').textContent = r.changes && r.changes.length ? `“${text}” → understood as “${r.text}”` : `“${text}”`;
@@ -1231,11 +1232,12 @@
     clearTimeout(smoothieTimer);
     if (!(by > 0)) return;
     const left = by - Date.now();
-    $('smoothieText').textContent = left > 0 ? `Smoothie: good until ${clockText(by)}${next.smoothieKept === 'fridge' ? ' (in the fridge)' : ''}` : 'Smoothie: past its safe time';
-    const warnAt = by - 20 * 60000, key = 'smoothieWarned:' + next.smoothieBy;
+    const cold = next.smoothieKept === 'fridge';
+    $('smoothieText').textContent = cold ? 'Smoothie in the fridge: finish it before bed' : left > 0 ? `Smoothie: good until ${clockText(by)}` : 'Smoothie: past its safe time';
+    const warnAt = by - (cold ? 120 : 20) * 60000, key = 'smoothieWarned:' + next.smoothieBy + (cold ? ':fridge' : '');
     if (left > 0 && !store.get(key)) smoothieTimer = setTimeout(() => {
       store.set(key, '1');
-      const t = `Finish your smoothie: it's good until ${clockText(by)}${next.smoothieKept === 'fridge' ? '' : ', or put it in the fridge'}.`;
+      const t = cold ? 'Your smoothie is in the fridge: finish it before bed.' : `Finish your smoothie: it's good until ${clockText(by)}, or put it in the fridge.`;
       status(t, 'warn'); if ($('autospeak').checked) speak(t);
     }, Math.max(0, warnAt - Date.now()));
   }
@@ -1245,7 +1247,7 @@
     const p = (n) => String(n).padStart(2, '0');
     const ics = (ms) => { const d = new Date(ms); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`; };
     const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//To-Do//Smoothie//EN', 'BEGIN:VEVENT', `UID:smoothie-${by}@todo`, `DTSTAMP:${ics(Date.now())}`,
-      `DTSTART:${ics(by - 20 * 60000)}`, 'DURATION:PT20M', `SUMMARY:Finish your smoothie (good until ${clockText(by)})`,
+      `DTSTART:${ics(by - (next.smoothieKept === 'fridge' ? 120 : 20) * 60000)}`, 'DURATION:PT20M', next.smoothieKept === 'fridge' ? 'SUMMARY:Finish your smoothie from the fridge' : `SUMMARY:Finish your smoothie (good until ${clockText(by)})`,
       'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', 'DESCRIPTION:Finish your smoothie, or put it in the fridge', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([body], { type: 'text/calendar' })); a.download = 'smoothie-reminder.ics';
@@ -1255,20 +1257,33 @@
 
   // ---------- Done / Skip buttons: one tap, then "are you sure?", then Yes (for when talking out loud isn't an option) ----------
   const closeConfirm = () => { confirmKind = null; $('confirmBox').classList.add('hidden'); $('stepActions').classList.toggle('hidden', !(next?.tasks || []).length); };
+  // the step is the smoothie waiting to be finished (not one that has gone bad): "done" could mean either
+  const smoothieAsk = () => (next?.tasks || []).some((id) => /^SMOOTHIE-FINISH@/.test(id)) && !/pour out/i.test(next.step || '') && next.smoothieKept !== 'fridge';
   function askStep(kind) {
     if (!next?.tasks?.length) { status('There is no step to mark right now.', 'warn'); return; }
-    confirmKind = kind;
+    confirmKind = kind === 'done' && smoothieAsk() ? 'smoothie' : kind;
     const name = next.step || (next.say || '').replace(/^(?:Saved\. )?Next: /, '').replace(/[.]\s.*$/, '');
-    $('confirmText').textContent = kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
-    $('confirmYes').textContent = kind === 'done' ? 'Yes, done' : 'Yes, skip';
+    $('confirmText').textContent = confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
+    $('confirmYes').textContent = confirmKind === 'smoothie' ? 'Finished it' : kind === 'done' ? 'Yes, done' : 'Yes, skip';
+    $('confirmFridge').classList.toggle('hidden', confirmKind !== 'smoothie');
+    $('confirmNo').textContent = confirmKind === 'smoothie' ? 'Cancel' : 'No';
     $('stepActions').classList.add('hidden');
     $('confirmBox').classList.remove('hidden');
   }
   $('doneBtn').onclick = () => askStep('done');
   $('skipBtn').onclick = () => askStep('skip');
   $('confirmNo').onclick = closeConfirm;
+  $('confirmFridge').onclick = async () => {
+    if (confirmKind !== 'smoothie') return closeConfirm();
+    pendingLines = ['smoothie: fridge'];
+    lastHandled = { closesCurrent: true };
+    closeConfirm();
+    $('stepActions').classList.add('hidden');
+    await send();
+    lastHandled = null;
+  };
   $('confirmYes').onclick = async () => {
-    const kind = confirmKind;
+    const kind = confirmKind === 'smoothie' ? 'done' : confirmKind;
     if (!kind || !next?.tasks?.length) return closeConfirm();
     pendingLines = [`${kind}: ${next.tasks.join(', ')}`];
     lastHandled = { closesCurrent: true };
@@ -1336,6 +1351,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261004a"></script>
+<script src="music.js?v=20261004b"></script>
 </body>
 </html>

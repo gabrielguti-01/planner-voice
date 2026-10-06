@@ -777,7 +777,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261004c"></script>
+<script src="speech.js?v=20261006a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1090,8 +1090,36 @@
       render();
       status('');
       if (speakIfNew && next.made !== before && $('autospeak').checked) speak(next.say);
+      catchUp();
       return next.made !== before;
     } catch (e) { status(e.message, 'bad'); return false; }
+  }
+  // The plan on screen is from an earlier planner day (the day changes at 4 AM) or older than 90 minutes: GitHub's
+  // schedule fell behind, so ask the planner to run now. At most once every 15 minutes.
+  function outdated(n) {
+    const made = n?.made ? new Date(n.made.replace(' ', 'T')).getTime() : NaN;
+    if (!(made > 0)) return false;
+    const day = (t) => new Date(t - 4 * 3600e3).toDateString();
+    return day(made) !== day(Date.now()) || Date.now() - made > 90 * 60e3;
+  }
+  let catching = false;
+  async function catchUp() {
+    if (MOCK || catching || !outdated(next) || pendingLines.length) return;
+    if (Date.now() - +store.get('catchUpAt', '0') < 15 * 60e3) return;
+    store.set('catchUpAt', String(Date.now()));
+    catching = true;
+    const made = next.made;
+    try {
+      status('Bringing the plan up to date…');
+      await appendInbox(['recheck: now']);
+      for (let i = 0; i < 18; i++) { // every 10 s, up to 3 minutes
+        await new Promise((r) => setTimeout(r, 10000));
+        const fresh = parseNext(await getNext());
+        if (fresh.made !== made) { next = fresh; render(); status('Up to date.'); if ($('autospeak').checked) speak(next.say); return; }
+      }
+      status('The planner is slow right now; it will catch up shortly.', 'warn');
+    } catch (e) { status('Could not update: ' + e.message, 'bad'); }
+    finally { catching = false; }
   }
 
   // ---------- voice out ----------
@@ -1351,6 +1379,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261004c"></script>
+<script src="music.js?v=20261006a"></script>
 </body>
 </html>

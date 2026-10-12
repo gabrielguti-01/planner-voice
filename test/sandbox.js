@@ -102,6 +102,7 @@ export default { join, resolve, dirname, basename };`),
     const f = {};
     f['rules/CONSTANTS.md'] = await source('rules/CONSTANTS.md');
     for (const n of ['daily', 'weekly', 'monthly']) f[`definitions/${n}.md`] = seed.routines(n, await source(`definitions/${n}.md`));
+    try { f['definitions/training.md'] = await source('definitions/training.md'); } catch { /* no program yet */ }
     return f;
   }
   async function runEngine() {

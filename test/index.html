@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261006a"></script>
-<script src="test/sandbox.js?v=20261006a"></script>
+<script src="test/seed.js?v=20261011a"></script>
+<script src="test/sandbox.js?v=20261011a"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -196,6 +196,13 @@
   .step-actions, .confirm { margin-top:14px; }
   .smoothie-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:14px; }
   .smoothie-line button { flex:0 0 auto; padding:9px 12px; }
+  .workout h3 { margin:14px 0 6px; font-size:15px; letter-spacing:.02em; color:var(--p); }
+  .workout h3:first-child { margin-top:0; }
+  .workout .ex { display:flex; justify-content:space-between; gap:14px; padding:6px 0; border-bottom:1px solid rgba(var(--p-rgb),.16); }
+  .workout .ex span:last-child { flex:0 1 45%; text-align:right; opacity:.85; }
+  .workout .label { margin:12px 0 4px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; opacity:.75; }
+  .workout ul { margin:4px 0; padding-left:18px; }
+  .workout li { margin:3px 0; }
   .confirm p { margin:0 0 10px; font-size:15px; line-height:1.35; }
   #screen .step-actions button, #screen .confirm button { padding:13px 6px; }
   button { font:700 12px/1 var(--display); letter-spacing:.18em; text-transform:uppercase; color:var(--p); background:rgba(var(--p-rgb),.06); border:1px solid rgba(var(--p-rgb),.32);
@@ -588,6 +595,7 @@
   <section class="card primary-panel" aria-live="polite">
     <h2>Next action</h2>
     <div id="say">…</div>
+    <div class="smoothie-line hidden" id="workoutLine"><span id="workoutText"></span><button id="workoutShow" class="mu-small">See the workout</button></div>
     <div class="smoothie-line hidden" id="smoothieLine"><span id="smoothieText"></span><button id="smoothieAlert" class="mu-small">Phone alert</button></div>
     <div class="row step-actions hidden" id="stepActions">
       <button id="doneBtn" class="primary">Done</button>
@@ -630,6 +638,7 @@
 
   <section class="card hidden" id="attentionCard"><h2>Alert</h2><ul id="attention"></ul></section>
   <details class="card" id="afterBox"><summary>After this one</summary><ol id="after"></ol></details>
+  <details class="card hidden" id="workoutBox"><summary>Today's workout</summary><div id="workout" class="workout"></div></details>
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
@@ -779,7 +788,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261006a"></script>
+<script src="speech.js?v=20261011a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1056,6 +1065,7 @@
     }
     $('say').textContent = shown;
     smoothieClock();
+    drawWorkout();
     const canMark = !!(next.tasks && next.tasks.length);
     if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
     $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
@@ -1204,6 +1214,13 @@
     if (action === 'groceries') { drawer(true); $('groceryBox').open = true; const g = (next?.groceries || []).filter((x) => !/^_/.test(x)); speak(g.length ? 'On the grocery list: ' + g.map((x) => x.replace(/ \(.*\)$/, '')).join('. ') + '.' : 'The grocery list is empty.'); return; }
     if (action === 'free') { const a = PlannerSpeech.freeAnswer(next.pressure, MOCK ? '2026-10-01 15:00' : localNow(), minutes ?? null); status(a); speak(a); return; }
     if (action === 'plan') { drawer(true); $('planBox').open = true; const p = (next?.plan || []).filter((x) => !/^_/.test(x)).slice(0, 4).map((x) => x.replace(/^~?(\d{2}):(\d{2}): /, (m, h, mm) => `around ${clockText(new Date('2000-01-01T' + h + ':' + mm).getTime())}, `).replace(/^now: /, 'Now, ').replace(/^at (\d{2}):(\d{2}): /, (m, h, mm) => `at ${clockText(new Date('2000-01-01T' + h + ':' + mm).getTime())}, `).replace(/^later: /, 'Later: ')); speak(p.length ? p.join('. ') + '.' : 'Nothing is planned for the rest of today.'); return; }
+    if (action === 'workout') {
+      const w = next?.workout;
+      if (w) { drawer(true); $('workoutBox').open = true; }
+      const n = w ? (w.body.match(/^\|/gm) || []).length - 2 : 0;
+      speak(!w ? 'There is no training program in the planner yet.' : w.state === 'recovery' ? `Today is a recovery day. Next workout: ${w.session}, ${w.title}.` : `${w.state === 'done' ? 'Done today' : "Today's workout"}: ${w.session}, ${w.title}${n > 0 && w.state !== 'done' ? `, ${n} exercises. Warm up for 5 to 8 minutes first` : ''}.`);
+      return;
+    }
     if (action === 'list') { drawer(true); $('todayBox').open = true; speak(`Still open today: ${next.today.slice(0, 8).join('. ')}.`); }
     else if (action === 'week') { drawer(true); $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }
     else refresh().then(() => speak(next?.say));
@@ -1256,6 +1273,33 @@
   // ---------- the made smoothie: its time on screen, a spoken reminder while the app is open, and a phone alert ----------
   let smoothieTimer = 0;
   const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
+  // ---------- today's workout (the ## Workout section: the program's own text) ----------
+  function drawWorkout() {
+    const w = next?.workout;
+    $('workoutBox').classList.toggle('hidden', !w);
+    const onStep = !!w && w.state === 'training' && (next.tasks || []).some((id) => /^GYM@/.test(id));
+    $('workoutLine').classList.toggle('hidden', !onStep);
+    if (onStep) $('workoutText').textContent = `Workout ${w.session}: ${w.title}`;
+    const box = $('workout');
+    box.innerHTML = '';
+    if (!w) return;
+    const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+    let list = null;
+    for (const raw of w.body.split('\n')) {
+      const l = raw.trim();
+      if (!l.startsWith('- ')) list = null;
+      if (!l) continue;
+      if (l.startsWith('### ')) box.appendChild(el('h3', l.slice(4)));
+      else if (/^\|/.test(l)) {
+        const cells = l.split('|').slice(1, -1).map((c) => c.trim());
+        if (cells.length < 2 || /^-+$/.test(cells[0]) || /^exercise$/i.test(cells[0])) continue;
+        const row = el('div', null, 'ex'); row.appendChild(el('span', cells[0])); row.appendChild(el('span', cells[1])); box.appendChild(row);
+      } else if (l.startsWith('- ')) { if (!list) { list = el('ul'); box.appendChild(list); } list.appendChild(el('li', l.slice(2))); }
+      else if (/^[A-Z][a-z]+:$/.test(l)) box.appendChild(el('p', l.slice(0, -1), 'label'));
+      else box.appendChild(el('p', l));
+    }
+  }
+  $('workoutShow').onclick = () => { drawer(true); $('workoutBox').open = true; setTimeout(() => $('workoutBox').scrollIntoView?.({ behavior: 'smooth' }), 80); };
   function smoothieClock() {
     const by = atLocal(next?.smoothieBy);
     $('smoothieLine').classList.toggle('hidden', !(by > 0));
@@ -1381,6 +1425,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261006a"></script>
+<script src="music.js?v=20261011a"></script>
 </body>
 </html>

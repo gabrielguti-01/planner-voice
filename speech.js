@@ -334,6 +334,7 @@
 
       if (/^(?:what'?s|what is|whats) next|^next up|^what (?:now|should i do)|^check the repo|^start (?:my|the) day|^what do i (?:need|have) to do|^where do i start/.test(low)) { out.action = out.action || 'next'; continue; }
       if (/^re-?check|^check (?:it |that |this )?again|^re-?prioriti[sz]e|^re-?calculate|^is (?:this|that|it) still (?:the )?(?:best|right|most)/.test(low)) { out.action = 'recheck'; continue; }
+      if (/^(?:what'?s |what is |whats |show me |read me |open )?(?:my |the |today'?s )*(?:workout|training)(?: (?:for )?today| plan)?\??$|^what (?:am i|do i) (?:doing|do) (?:at|in) the gym/.test(low)) { out.action = 'workout'; continue; }
       if (/^(?:read me |what'?s on |what is on |show me )?(?:the |my )?(?:grocery|shopping) list\b|^what do i need (?:to buy|from the store)/.test(low)) { out.action = 'groceries'; continue; }
       if ((m = s.match(/^(?:please )?(?:add|put) (.+?) (?:to|on) (?:the |my )?(?:grocery|shopping) list$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
       if ((m = s.match(/^(?:we'?re|i'?m|we are|i am)\s+(?:almost |nearly |running )?(?:out of|low on) (.+)$/i)) || (m = s.match(/^(?:we|i)\s+(?:ran out of|are out of|need to buy|need to get) (?:more |some |new )?(.+)$/i))) { out.commands.push(`grocery: ${m[1].replace(/\s+and\s+/gi, '; ')}`); continue; }
@@ -448,6 +449,12 @@
       step: ((section('Now').match(/^- Do: (.*)$/m) || [])[1] || '').trim(),
       tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       day: { zone: field('zone'), windDown: field('wind_down'), bed: field('bed'), events: section('Day').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim()) }, saved: bullets('Last saved'),
+      workout: (() => {
+        const w = section('Workout');
+        if (!w) return null;
+        const f = (k) => ((w.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '').trim();
+        return { state: f('state'), session: f('session'), title: f('title'), outdoor: f('outdoor') === 'yes', body: w.replace(/^[a-z_]+::.*\n?/gm, '').trim() };
+      })(),
       pressure: { level: field('level'), freeUntil: field('free_until'), slackH: field('slack_h'), nextAnchor: field('next_anchor'), lines: bullets('Pressure') },
     };
   }

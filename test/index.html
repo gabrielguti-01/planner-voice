@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261014a"></script>
-<script src="test/sandbox.js?v=20261014a"></script>
+<script src="test/seed.js?v=20261014b"></script>
+<script src="test/sandbox.js?v=20261014b"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -198,8 +198,16 @@
   .smoothie-line button { flex:0 0 auto; padding:9px 12px; }
   .workout h3 { margin:14px 0 6px; font-size:15px; letter-spacing:.02em; color:var(--p); }
   .workout h3:first-child { margin-top:0; }
-  .workout .ex { display:flex; justify-content:space-between; gap:14px; padding:6px 0; border-bottom:1px solid rgba(var(--p-rgb),.16); }
-  .workout .ex span:last-child { flex:0 1 45%; text-align:right; opacity:.85; }
+  .workout .ex { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid rgba(var(--p-rgb),.16); }
+  .workout .ex .what { flex:1 1 auto; min-width:0; }
+  .workout .ex .dose { display:block; font-size:13px; opacity:.75; margin-top:2px; }
+  .workout .ex.done .what { opacity:.45; text-decoration:line-through; }
+  .workout .ex.next .what { color:var(--p); }
+  .workout .sets { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; flex:0 0 auto; max-width:46%; }
+  .workout .set { width:30px; height:30px; min-height:0; padding:0; border-radius:50%; border:1.5px solid rgba(var(--p-rgb),.7); background:transparent; font-size:12px; line-height:1; }
+  .workout .set.on { background:var(--p); color:var(--bg, #000); border-color:var(--p); }
+  .workout .progress { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:2px 0 8px; font-size:14px; }
+  .workout .progress button { flex:0 0 auto; padding:6px 10px; font-size:12px; }
   .workout .label { margin:12px 0 4px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; opacity:.75; }
   .workout ul { margin:4px 0; padding-left:18px; }
   .workout li { margin:3px 0; }
@@ -788,7 +796,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261014a"></script>
+<script src="speech.js?v=20261014b"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1274,17 +1282,37 @@
   let smoothieTimer = 0;
   const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
   // ---------- today's workout (the ## Workout section: the program's own text) ----------
+  // the session's exercises and how many sets each has ("4 × 10", "2 sets; …", "2 cycles total" → 4, 2, 2)
+  const workoutExercises = (w) => w.body.split('\n').map((l) => l.trim()).filter((l) => /^\|/.test(l))
+    .map((l) => l.split('|').slice(1, -1).map((c) => c.trim())).filter((c) => c.length >= 2 && !/^-+$/.test(c[0]) && !/^exercise$/i.test(c[0]))
+    .map(([name, dose]) => ({ name, dose, sets: Math.max(1, Math.min(8, +((dose.match(/^(\d+)\s*(?:×|x|sets?\b|cycles?\b)/i) || [])[1]) || 1)) }));
+  const workoutKey = (w) => `workout:${today()}:${w.session}`;
+  const workoutDone = (w) => { try { return JSON.parse(store.get(workoutKey(w), '[]')) || []; } catch { return []; } };
+  function workoutStatus(w) {
+    const ex = workoutExercises(w), done = workoutDone(w);
+    const finished = ex.filter((e, i) => (done[i] || 0) >= e.sets).length;
+    const n = ex.findIndex((e, i) => (done[i] || 0) < e.sets);
+    return { ex, done, finished, next: n, text: n < 0 ? `All ${ex.length} exercises done: tap Done on the workout.` : `${finished} of ${ex.length} done · Next: ${ex[n].name}${ex[n].sets > 1 ? ` (set ${(done[n] || 0) + 1} of ${ex[n].sets})` : ''}` };
+  }
   function drawWorkout() {
     const w = next?.workout;
     $('workoutBox').classList.toggle('hidden', !w);
     const onStep = !!w && w.state === 'training' && (next.tasks || []).some((id) => /^GYM@/.test(id));
     $('workoutLine').classList.toggle('hidden', !onStep);
-    if (onStep) $('workoutText').textContent = `Workout ${w.session}: ${w.title}`;
     const box = $('workout');
     box.innerHTML = '';
     if (!w) return;
+    const checklist = w.state !== 'recovery';
+    const st = checklist ? workoutStatus(w) : null;
+    if (onStep) $('workoutText').textContent = st && st.finished ? `Workout ${w.session}: ${st.text}` : `Workout ${w.session}: ${w.title}`;
     const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
-    let list = null;
+    if (checklist && st.ex.length) {
+      const bar = el('div', null, 'progress');
+      bar.appendChild(el('span', st.text));
+      if (st.done.some((x) => x)) { const r = el('button', 'Clear'); r.onclick = () => { store.set(workoutKey(w), '[]'); drawWorkout(); }; bar.appendChild(r); }
+      box.appendChild(bar);
+    }
+    let list = null, exi = 0;
     for (const raw of w.body.split('\n')) {
       const l = raw.trim();
       if (!l.startsWith('- ')) list = null;
@@ -1293,7 +1321,20 @@
       else if (/^\|/.test(l)) {
         const cells = l.split('|').slice(1, -1).map((c) => c.trim());
         if (cells.length < 2 || /^-+$/.test(cells[0]) || /^exercise$/i.test(cells[0])) continue;
-        const row = el('div', null, 'ex'); row.appendChild(el('span', cells[0])); row.appendChild(el('span', cells[1])); box.appendChild(row);
+        const i = exi++, e = checklist ? st.ex[i] : null, have = checklist ? (st.done[i] || 0) : 0;
+        const row = el('div', null, 'ex' + (e && have >= e.sets ? ' done' : '') + (checklist && i === st.next ? ' next' : ''));
+        const what = el('div', null, 'what'); what.appendChild(el('span', cells[0])); what.appendChild(el('span', cells[1], 'dose')); row.appendChild(what);
+        if (e) {
+          const sets = el('div', null, 'sets');
+          for (let k = 0; k < e.sets; k++) {
+            const b = el('button', String(k + 1), 'set' + (k < have ? ' on' : ''));
+            b.setAttribute('aria-label', `${cells[0]}, set ${k + 1}${k < have ? ', done' : ''}`);
+            b.onclick = () => { const d = workoutDone(w); d[i] = k < (d[i] || 0) ? k : k + 1; store.set(workoutKey(w), JSON.stringify(d)); drawWorkout(); };
+            sets.appendChild(b);
+          }
+          row.appendChild(sets);
+        }
+        box.appendChild(row);
       } else if (l.startsWith('- ')) { if (!list) { list = el('ul'); box.appendChild(list); } list.appendChild(el('li', l.slice(2))); }
       else if (/^[A-Z][a-z]+:$/.test(l)) box.appendChild(el('p', l.slice(0, -1), 'label'));
       else box.appendChild(el('p', l));
@@ -1439,6 +1480,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261014a"></script>
+<script src="music.js?v=20261014b"></script>
 </body>
 </html>

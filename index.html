@@ -206,6 +206,10 @@
   .workout .set.on { background:var(--p); color:var(--bg, #000); border-color:var(--p); }
   .workout .progress { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:2px 0 8px; font-size:14px; }
   .workout .progress button { flex:0 0 auto; padding:6px 10px; font-size:12px; }
+  .workout .ex .early { display:block; font-size:12px; opacity:.8; color:var(--p); text-decoration:none; }
+  .wk-pop { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:16px; }
+  .wk-pop .card { width:100%; max-width:420px; max-height:80vh; overflow:auto; margin:0; }
+  .wk-pop ul { margin:8px 0 12px; padding-left:18px; font-size:14px; }
   .workout .label { margin:12px 0 4px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; opacity:.75; }
   .workout ul { margin:4px 0; padding-left:18px; }
   .workout li { margin:3px 0; }
@@ -794,7 +798,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261014b"></script>
+<script src="speech.js?v=20261014d"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1239,7 +1243,7 @@
       await appendInbox(lines);
       setState('idle');
       $('pending').classList.add('hidden');
-      const made = next?.made;
+      const made = next?.made, snap = JSON.stringify(next); // made:: has minute resolution, so the content is compared too
       // The current step was reported done or skipped: the next one is already known, so show it and say it at once
       // (the same text on screen and out loud). Anything else waits for the engine, then shows and says its answer.
       const closes = lastHandled?.closesCurrent || (next?.tasks?.length && lines.length === 1 && /^(done|skip):/.test(lines[0]) && next.tasks.every((id) => lines[0].includes(id)));
@@ -1261,7 +1265,7 @@
         await new Promise((r) => setTimeout(r, 5000));
         if (seq !== sendSeq) return; // a newer report took over
         const fresh = parseNext(await getNext());
-        if (fresh.made !== made && !stale(fresh)) {
+        if ((fresh.made !== made || JSON.stringify(fresh) !== snap) && !stale(fresh)) {
           closedIds.clear();
           next = fresh; render(); status('Updated.');
           if ($('autospeak').checked) {
@@ -1284,13 +1288,53 @@
   const workoutExercises = (w) => w.body.split('\n').map((l) => l.trim()).filter((l) => /^\|/.test(l))
     .map((l) => l.split('|').slice(1, -1).map((c) => c.trim())).filter((c) => c.length >= 2 && !/^-+$/.test(c[0]) && !/^exercise$/i.test(c[0]))
     .map(([name, dose]) => ({ name, dose, sets: Math.max(1, Math.min(8, +((dose.match(/^(\d+)\s*(?:×|x|sets?\b|cycles?\b)/i) || [])[1]) || 1)) }));
-  const workoutKey = (w) => `workout:${today()}:${w.session}`;
-  const workoutDone = (w) => { try { return JSON.parse(store.get(workoutKey(w), '[]')) || []; } catch { return []; } };
+  // today's session, or (once it's done) tomorrow's, worked on ahead
+  const ahead = (w) => w.state === 'done' && !!w.nextSession;
+  const workoutKey = (w) => (ahead(w) ? `workout-ahead:${today()}:${w.nextSession}` : `workout:${today()}:${w.session}`);
+  const workoutDone = (w) => {
+    let d; try { d = JSON.parse(store.get(workoutKey(w), '[]')) || []; } catch { d = []; }
+    // exercises done ahead (saved in the planner) count as done
+    workoutExercises(w).forEach((e, i) => { if (w.doneAhead.some((n) => n.toLowerCase() === e.name.toLowerCase())) d[i] = Math.max(d[i] || 0, e.sets); });
+    return d;
+  };
   function workoutStatus(w) {
     const ex = workoutExercises(w), done = workoutDone(w);
     const finished = ex.filter((e, i) => (done[i] || 0) >= e.sets).length;
     const n = ex.findIndex((e, i) => (done[i] || 0) < e.sets);
-    return { ex, done, finished, next: n, text: n < 0 ? `All ${ex.length} exercises done: tap Done on the workout.` : `${finished} of ${ex.length} done · Next: ${ex[n].name}${ex[n].sets > 1 ? ` (set ${(done[n] || 0) + 1} of ${ex[n].sets})` : ''}` };
+    const label = ahead(w) ? `Tomorrow's ${w.nextSession}, done ahead: ` : '';
+    return { ex, done, finished, next: n, text: n < 0 ? (ahead(w) ? `All of ${w.nextSession} done ahead.` : `All ${ex.length} exercises done.`) : `${label}${finished} of ${ex.length} done · Next: ${ex[n].name}${ex[n].sets > 1 ? ` (set ${(done[n] || 0) + 1} of ${ex[n].sets})` : ''}` };
+  }
+  // a set tapped: save it; finishing everything asks to check off the workout; work ahead is saved to the planner
+  function setDone(w, i, n) {
+    const ex = workoutExercises(w), before = workoutStatus(w);
+    const d = workoutDone(w); d[i] = n; store.set(workoutKey(w), JSON.stringify(d));
+    drawWorkout();
+    const after = workoutStatus(w), name = ex[i].name;
+    if (ahead(w)) {
+      const was = (before.done[i] || 0) >= ex[i].sets, is = n >= ex[i].sets;
+      if (was !== is) appendInbox([`workout: ahead ${w.nextSession}${is ? '' : ' undo'} | ${name}`]).then(() => status(is ? `Saved: ${name} counts for tomorrow's ${w.nextSession}.` : `${name} is back on tomorrow's list.`)).catch((e) => status('Could not save: ' + e.message, 'bad'));
+    } else if (before.next >= 0 && after.next < 0 && w.gym) workoutConfirm(w, ex);
+  }
+  function workoutConfirm(w, ex) {
+    const pop = document.createElement('div'); pop.className = 'wk-pop';
+    const card = document.createElement('section'); card.className = 'card'; pop.appendChild(card);
+    const h = document.createElement('h2'); h.textContent = `Workout ${w.session}: all done?`; card.appendChild(h);
+    const p = document.createElement('p'); p.textContent = 'Confirm that all of these are done:'; card.appendChild(p);
+    const ul = document.createElement('ul'); for (const e of ex) { const li = document.createElement('li'); li.textContent = `${e.name} — ${e.dose}`; ul.appendChild(li); } card.appendChild(ul);
+    const row = document.createElement('div'); row.className = 'row';
+    const yes = document.createElement('button'); yes.className = 'primary'; yes.textContent = 'Yes, all done';
+    const no = document.createElement('button'); no.textContent = 'Not yet';
+    row.appendChild(yes); row.appendChild(no); card.appendChild(row);
+    no.onclick = () => pop.remove();
+    yes.onclick = async () => {
+      pop.remove();
+      pendingLines = [`done: ${w.gym}`];
+      lastHandled = { closesCurrent: (next?.tasks || []).includes(w.gym) };
+      await send();
+      lastHandled = null;
+      status(`Workout ${w.session} checked off. Tomorrow's session shows here once the planner updates.`);
+    };
+    document.body.appendChild(pop);
   }
   function drawWorkout() {
     const w = next?.workout;
@@ -1300,7 +1344,7 @@
     const box = $('workout');
     box.innerHTML = '';
     if (!w) return;
-    const checklist = w.state !== 'recovery';
+    const checklist = w.state === 'training' || ahead(w);
     const st = checklist ? workoutStatus(w) : null;
     if (onStep) $('workoutText').textContent = st && st.finished ? `Workout ${w.session}: ${st.text}` : `Workout ${w.session}: ${w.title}`;
     const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -1321,13 +1365,15 @@
         if (cells.length < 2 || /^-+$/.test(cells[0]) || /^exercise$/i.test(cells[0])) continue;
         const i = exi++, e = checklist ? st.ex[i] : null, have = checklist ? (st.done[i] || 0) : 0;
         const row = el('div', null, 'ex' + (e && have >= e.sets ? ' done' : '') + (checklist && i === st.next ? ' next' : ''));
-        const what = el('div', null, 'what'); what.appendChild(el('span', cells[0])); what.appendChild(el('span', cells[1], 'dose')); row.appendChild(what);
+        const what = el('div', null, 'what'); what.appendChild(el('span', cells[0])); what.appendChild(el('span', cells[1], 'dose'));
+        if (e && !ahead(w) && w.doneAhead.some((n) => n.toLowerCase() === e.name.toLowerCase())) what.appendChild(el('span', `done ahead${w.aheadDay ? ' on ' + w.aheadDay.slice(5).replace('-', '/') : ''}`, 'early'));
+        row.appendChild(what);
         if (e) {
           const sets = el('div', null, 'sets');
           for (let k = 0; k < e.sets; k++) {
             const b = el('button', String(k + 1), 'set' + (k < have ? ' on' : ''));
             b.setAttribute('aria-label', `${cells[0]}, set ${k + 1}${k < have ? ', done' : ''}`);
-            b.onclick = () => { const d = workoutDone(w); d[i] = k < (d[i] || 0) ? k : k + 1; store.set(workoutKey(w), JSON.stringify(d)); drawWorkout(); };
+            b.onclick = () => setDone(w, i, k < have ? k : k + 1);
             sets.appendChild(b);
           }
           row.appendChild(sets);
@@ -1478,6 +1524,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261014b"></script>
+<script src="music.js?v=20261014d"></script>
 </body>
 </html>

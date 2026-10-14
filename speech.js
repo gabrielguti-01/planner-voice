@@ -453,7 +453,8 @@
         const w = section('Workout');
         if (!w) return null;
         const f = (k) => ((w.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '').trim();
-        return { state: f('state'), session: f('session'), title: f('title'), outdoor: f('outdoor') === 'yes', body: w.replace(/^[a-z_]+::.*\n?/gm, '').trim() };
+        return { state: f('state'), session: f('session'), title: f('title'), outdoor: f('outdoor') === 'yes', gym: f('gym'), nextSession: f('next_session'),
+          doneAhead: f('done_ahead').split(';').map((x) => x.trim()).filter(Boolean), aheadDay: f('ahead_day'), body: w.replace(/^[a-z_]+::.*\n?/gm, '').trim() };
       })(),
       pressure: { level: field('level'), freeUntil: field('free_until'), slackH: field('slack_h'), nextAnchor: field('next_anchor'), lines: bullets('Pressure') },
     };

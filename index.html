@@ -786,7 +786,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261011a"></script>
+<script src="speech.js?v=20261014a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1331,14 +1331,17 @@
   const closeConfirm = () => { confirmKind = null; $('confirmBox').classList.add('hidden'); $('stepActions').classList.toggle('hidden', !(next?.tasks || []).length); };
   // the step is the smoothie waiting to be finished (not one that has gone bad): "done" could mean either
   const smoothieAsk = () => (next?.tasks || []).some((id) => /^SMOOTHIE-FINISH@/.test(id)) && !/pour out/i.test(next.step || '') && next.smoothieKept !== 'fridge';
+  // lunch is an avocado: one not eaten goes into the smoothie (user, 2026-10-14)
+  const avocadoAsk = () => (next?.tasks || []).some((id) => /^LUNCH@/.test(id)) && /avocado/i.test(next.step || '') && !/no avocado/i.test(next.step || '');
   function askStep(kind) {
     if (!next?.tasks?.length) { status('There is no step to mark right now.', 'warn'); return; }
-    confirmKind = kind === 'done' && smoothieAsk() ? 'smoothie' : kind;
+    confirmKind = kind === 'done' && smoothieAsk() ? 'smoothie' : kind === 'done' && avocadoAsk() ? 'avocado' : kind;
     const name = next.step || (next.say || '').replace(/^(?:Saved\. )?Next: /, '').replace(/[.]\s.*$/, '');
-    $('confirmText').textContent = confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
-    $('confirmYes').textContent = confirmKind === 'smoothie' ? 'Finished it' : kind === 'done' ? 'Yes, done' : 'Yes, skip';
-    $('confirmFridge').classList.toggle('hidden', confirmKind !== 'smoothie');
-    $('confirmNo').textContent = confirmKind === 'smoothie' ? 'Cancel' : 'No';
+    $('confirmText').textContent = confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : confirmKind === 'avocado' ? 'Did you eat the avocado?' : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
+    $('confirmYes').textContent = confirmKind === 'smoothie' ? 'Finished it' : confirmKind === 'avocado' ? 'Yes, I ate it' : kind === 'done' ? 'Yes, done' : 'Yes, skip';
+    $('confirmFridge').textContent = confirmKind === 'avocado' ? 'No' : 'In the fridge';
+    $('confirmFridge').classList.toggle('hidden', confirmKind !== 'smoothie' && confirmKind !== 'avocado');
+    $('confirmNo').textContent = confirmKind === 'smoothie' || confirmKind === 'avocado' ? 'Cancel' : 'No';
     $('stepActions').classList.add('hidden');
     $('confirmBox').classList.remove('hidden');
   }
@@ -1346,6 +1349,17 @@
   $('skipBtn').onclick = () => askStep('skip');
   $('confirmNo').onclick = closeConfirm;
   $('confirmFridge').onclick = async () => {
+    if (confirmKind === 'avocado') { // not eaten: it goes into the smoothie, and lunch is still checked off
+      pendingLines = [`done: ${next.tasks.join(', ')}`];
+      lastHandled = { closesCurrent: true };
+      closeConfirm();
+      $('stepActions').classList.add('hidden');
+      await send();
+      lastHandled = null;
+      const t = 'Okay: add the avocado to the smoothie.';
+      status(t); if ($('autospeak').checked) speak(t);
+      return;
+    }
     if (confirmKind !== 'smoothie') return closeConfirm();
     pendingLines = ['smoothie: fridge'];
     lastHandled = { closesCurrent: true };
@@ -1355,7 +1369,7 @@
     lastHandled = null;
   };
   $('confirmYes').onclick = async () => {
-    const kind = confirmKind === 'smoothie' ? 'done' : confirmKind;
+    const kind = confirmKind === 'smoothie' || confirmKind === 'avocado' ? 'done' : confirmKind;
     if (!kind || !next?.tasks?.length) return closeConfirm();
     pendingLines = [`${kind}: ${next.tasks.join(', ')}`];
     lastHandled = { closesCurrent: true };
@@ -1423,6 +1437,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261011a"></script>
+<script src="music.js?v=20261014a"></script>
 </body>
 </html>

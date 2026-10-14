@@ -445,6 +445,8 @@
       made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
       say: section('Say this'), after, afterIds, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), late: bullets('Late or waiting'), groceries: bullets('Groceries'),
+      // from the Groceries section itself ("for::" also appears elsewhere in next.md)
+      groceryFor: (section('Groceries').match(/^for::\s*(\d{4}-\d{2}-\d{2})/m) || ['', ''])[1], groceryRun: (section('Groceries').match(/^run::\s*(\S+)/m) || ['', ''])[1],
       then: ((section('Now').match(/^- Then: (.*)$/m) || [])[1] || '').trim(),
       step: ((section('Now').match(/^- Do: (.*)$/m) || [])[1] || '').trim(),
       tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),

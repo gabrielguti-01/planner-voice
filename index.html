@@ -207,6 +207,15 @@
   .workout .progress { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:2px 0 8px; font-size:14px; }
   .workout .progress button { flex:0 0 auto; padding:6px 10px; font-size:12px; }
   .workout .ex .early { display:block; font-size:12px; opacity:.8; color:var(--p); text-decoration:none; }
+  .shop .item { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid rgba(var(--p-rgb),.16); }
+  .shop .tick { flex:0 0 auto; width:30px; height:30px; min-height:0; padding:0; border-radius:6px; border:1.5px solid rgba(var(--p-rgb),.7); background:transparent; font-size:16px; line-height:1; }
+  .shop .item.got .tick { background:var(--p); color:var(--bg, #000); border-color:var(--p); }
+  .shop .item.got .name { opacity:.5; text-decoration:line-through; }
+  .shop .qty { display:block; font-size:13px; opacity:.75; margin-top:2px; }
+  .shop .group { margin:14px 0 4px; font-size:13px; letter-spacing:.06em; text-transform:uppercase; opacity:.75; }
+  .shop .head { font-size:14px; margin:0 0 6px; }
+  .shop .actions { margin-top:12px; }
+  .shop .confirm-shop p { margin:10px 0 8px; font-size:14px; }
   .wk-pop { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:16px; }
   .wk-pop .card { width:100%; max-width:420px; max-height:80vh; overflow:auto; margin:0; }
   .wk-pop ul { margin:8px 0 12px; padding-left:18px; font-size:14px; }
@@ -605,6 +614,7 @@
   <section class="card primary-panel" aria-live="polite">
     <h2>Next action</h2>
     <div id="say">…</div>
+    <div class="smoothie-line hidden" id="shopLine"><span id="shopText"></span><button id="shopShow" class="mu-small">Open the list</button></div>
     <div class="smoothie-line hidden" id="workoutLine"><span id="workoutText"></span><button id="workoutShow" class="mu-small">See the workout</button></div>
     <div class="smoothie-line hidden" id="smoothieLine"><span id="smoothieText"></span><button id="smoothieAlert" class="mu-small">Phone alert</button></div>
     <div class="row step-actions hidden" id="stepActions">
@@ -652,7 +662,7 @@
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
-  <details class="card hidden" id="groceryBox"><summary>Grocery list</summary><ul id="groceries"></ul></details>
+  <details class="card hidden" id="groceryBox"><summary>Grocery list</summary><div id="groceries" class="shop"></div></details>
   <details class="card" id="weekBox"><summary>Coming up this week</summary><ul id="week"></ul></details>
 
   <details class="card" id="settings">
@@ -798,7 +808,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261014d"></script>
+<script src="speech.js?v=20261014e"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1096,7 +1106,7 @@
     fill('attention', next.attention, '');
     $('attentionCard').classList.toggle('hidden', !next.attention.length);
     fill('late', next.late || [], '');
-    fill('groceries', next.groceries || [], '');
+    drawGroceries();
     $('groceryBox').classList.toggle('hidden', !(next.groceries || []).length);
     $('lateBox').classList.toggle('hidden', !(next.late || []).length);
     if ($('drawer').classList.contains('hidden')) $('menu').textContent = next.attention.length ? 'More (' + next.attention.length + ')' : 'More';
@@ -1283,6 +1293,66 @@
   // ---------- the made smoothie: its time on screen, a spoken reminder while the app is open, and a phone alert ----------
   let smoothieTimer = 0;
   const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
+  // ---------- the shopping checklist ----------
+  // "Steak: 7 (have 4, …)" → { name: 'Steak', qty: '7' }; "Extra: Diet coke" → { name: 'Diet coke', extra: true }
+  const groceryItems = () => (next?.groceries || []).filter((x) => !/^_/.test(x)).map((line) => {
+    const extra = /^Extra:\s*/i.test(line), rest = line.replace(/^Extra:\s*/i, '').replace(/\s*\([^()]*\)\s*$/, '');
+    const m = rest.match(/^(.*?):\s*(.+)$/);
+    const name = (m ? m[1] : rest).trim(), qty = m ? m[2].replace(/^up to\s+/i, '').trim() : '';
+    return { name, qty, extra };
+  });
+  const shopKey = () => `groceryChecks:${next?.groceryFor || 'list'}`;
+  const shopChecked = () => { try { return new Set(JSON.parse(store.get(shopKey(), '[]'))); } catch { return new Set(); } };
+  const shopSave = (set) => store.set(shopKey(), JSON.stringify([...set]));
+  let shopConfirming = false;
+  function drawGroceries() {
+    const box = $('groceries'); box.innerHTML = '';
+    const items = groceryItems(), got = shopChecked();
+    const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
+    const onStep = (next?.tasks || []).some((id) => /^GROCERY-RUN@/.test(id));
+    const picked = items.filter((x) => got.has(x.name)).length;
+    $('shopLine').classList.toggle('hidden', !onStep || !items.length);
+    if (onStep) $('shopText').textContent = `Shopping list: ${picked} of ${items.length} picked up`;
+    if (!items.length) return;
+    box.appendChild(el('p', picked ? `${items.length - picked} still to get · ${picked} picked up` : `${items.length} to get`, 'head'));
+    const row = (x) => {
+      const r = el('div', null, 'item' + (got.has(x.name) ? ' got' : ''));
+      const b = el('button', got.has(x.name) ? '✓' : '', 'tick');
+      b.setAttribute('aria-label', `${x.name}${got.has(x.name) ? ', picked up' : ''}`);
+      b.onclick = () => { const s = shopChecked(); s.has(x.name) ? s.delete(x.name) : s.add(x.name); shopSave(s); drawGroceries(); };
+      const t = el('div', null, 'name'); t.appendChild(el('span', x.extra ? `${x.name} (extra)` : x.name)); if (x.qty) t.appendChild(el('span', x.qty, 'qty'));
+      r.appendChild(b); r.appendChild(t); return r;
+    };
+    for (const x of items.filter((x) => !got.has(x.name))) box.appendChild(row(x));
+    if (picked) { box.appendChild(el('p', 'Picked up', 'group')); for (const x of items.filter((x) => got.has(x.name))) box.appendChild(row(x)); }
+    const act = el('div', null, 'actions');
+    if (!shopConfirming) { const d = el('button', 'Done shopping', 'primary'); d.onclick = () => { shopConfirming = true; drawGroceries(); }; act.appendChild(d); }
+    else {
+      const left = items.length - picked;
+      const c = el('div', null, 'confirm-shop');
+      c.appendChild(el('p', `${picked ? `Record the ${picked} picked-up item${picked > 1 ? 's' : ''} as bought` : 'Nothing is checked, so nothing is recorded as bought'}${next.groceryRun ? ' and close this shopping trip' : ''}?${left ? ` ${left} not picked up stay on the list.` : ''}`));
+      const r2 = el('div', null, 'row');
+      const yes = el('button', 'Yes, done shopping', 'primary'), no = el('button', 'Not yet');
+      no.onclick = () => { shopConfirming = false; drawGroceries(); };
+      yes.onclick = async () => {
+        const lines = items.filter((x) => got.has(x.name)).map((x) => `bought: ${x.name}${x.qty ? ' ' + x.qty : ''}`);
+        if (next.groceryRun) lines.push(`done: ${next.groceryRun}`);
+        shopConfirming = false;
+        if (!lines.length) { drawGroceries(); return; }
+        pendingLines = lines;
+        lastHandled = { closesCurrent: !!next.groceryRun && (next.tasks || []).includes(next.groceryRun) };
+        const key = shopKey();
+        await send();
+        lastHandled = null;
+        store.set(key, '[]');
+        status(`Done shopping: ${picked} recorded as bought${left ? `; ${left} still on the list` : ''}.`);
+      };
+      r2.appendChild(yes); r2.appendChild(no); c.appendChild(r2); act.appendChild(c);
+    }
+    box.appendChild(act);
+  }
+  $('shopShow').onclick = () => { drawer(true); $('groceryBox').open = true; setTimeout(() => $('groceryBox').scrollIntoView?.({ behavior: 'smooth' }), 80); };
+
   // ---------- today's workout (the ## Workout section: the program's own text) ----------
   // the session's exercises and how many sets each has ("4 × 10", "2 sets; …", "2 cycles total" → 4, 2, 2)
   const workoutExercises = (w) => w.body.split('\n').map((l) => l.trim()).filter((l) => /^\|/.test(l))
@@ -1524,6 +1594,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261014d"></script>
+<script src="music.js?v=20261014e"></script>
 </body>
 </html>

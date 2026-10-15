@@ -808,7 +808,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261014e"></script>
+<script src="speech.js?v=20261015b"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -816,8 +816,21 @@
   const MOCK = new URLSearchParams(location.search).has('mock');
   const store = { get: (k, d = '') => { try { return localStorage.getItem('planner.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('planner.' + k, v); } catch {} } };
   let next = null, pendingLines = [], lastSpoken = '', lastHandled = null, confirmKind = null; // confirmKind: the Done/Skip question that is open
-  const closedIds = new Set(); let sendSeq = 0; // steps closed here that the planner hasn't caught up with yet
-  const stale = (fresh) => (fresh.tasks || []).some((id) => closedIds.has(id));
+  // steps closed here that the planner may not have applied yet: id → when (kept 10 minutes)
+  const closedIds = new Map(); let sendSeq = 0;
+  const CLOSED_MS = 10 * 60e3;
+  const isClosed = (id) => { const t = closedIds.get(id); if (t && Date.now() - t > CLOSED_MS) closedIds.delete(id); return closedIds.has(id); };
+  const allClosed = (ids) => !!(ids && ids.length) && ids.every(isClosed);
+  // a plan with the steps already closed here taken out: the first open one becomes the step on screen
+  function mask(n) {
+    if (!n) return n;
+    const pairs = (n.after || []).map((a, i) => [a, (n.afterIds || [])[i] || []]).filter(([, ids]) => !allClosed(ids));
+    const base = { ...n, after: pairs.map((p) => p[0]), afterIds: pairs.map((p) => p[1]) };
+    if (!allClosed(n.tasks)) return base;
+    const [up, ids] = pairs.shift() || ['', []];
+    return { ...base, say: up ? `Saved. Next: ${up}.` : 'Saved. Nothing else is queued right now.', step: up, tasks: ids, after: pairs.map((p) => p[0]), afterIds: pairs.map((p) => p[1]), then: '' };
+  }
+  const stale = () => false; // replaced by mask(): an older plan is shown without the steps already closed here
   const MODES = { idle: 'ONLINE', listening: 'LISTENING', speaking: 'SPEAKING', saving: 'SYNCING' };
   const setState = (s) => { if (document.body) document.body.dataset.state = s; $('mode').textContent = MODES[s]; window.PlannerMusic?.onState(s); };
   const tickClock = () => { const d = new Date(); $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
@@ -1062,17 +1075,39 @@
     return b64decode((await r.json()).content);
   }
   async function appendInbox(lines) {
-    if (MOCK) { mockInbox.push(...lines); return; }
-    for (let attempt = 0; attempt < 3; attempt++) {
+    if (MOCK) { if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS)); mockInbox.push(...lines); return; }
+    for (let attempt = 0; attempt < 6; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt)); // GitHub may still be settling the last write
       const r = await api('state/inbox.md');
-      if (!r.ok) throw new Error(`Could not read the inbox (${r.status}).`);
+      if (!r.ok) { if (r.status >= 500 || r.status === 409) continue; throw new Error(`Could not read the inbox (${r.status}).`); }
       const j = await r.json();
       const body = b64decode(j.content).replace(/\n*$/, '\n') + lines.map((l) => `- ${l}`).join('\n') + '\n';
       const w = await api('state/inbox.md', { method: 'PUT', body: JSON.stringify({ message: `Inbox: ${lines.join('; ').slice(0, 60)}`, content: b64encode(body), sha: j.sha }) });
       if (w.ok) return;
-      if (w.status !== 409) throw new Error(`Could not save (${w.status}).`);
+      if (w.status !== 409 && w.status !== 422 && w.status < 500) throw new Error(`Could not save (${w.status}).`);
     }
-    throw new Error('Could not save: the inbox kept changing. Try again.');
+    throw new Error('GitHub kept refusing the save');
+  }
+  // the outbox: lines waiting to be saved, kept on the phone so nothing is lost; one saver, in order
+  const outbox = () => { try { return JSON.parse(store.get('outbox', '[]')) || []; } catch { return []; } };
+  const setOutbox = (l) => store.set('outbox', JSON.stringify(l));
+  let flushing = null, flushRetry = 0;
+  function flush() {
+    if (!flushing) flushing = (async () => {
+      try {
+        while (outbox().length) {
+          const batch = outbox();
+          await appendInbox(batch);
+          setOutbox(outbox().slice(batch.length)); // lines queued meanwhile stay for the next round
+        }
+        return true;
+      } catch (e) {
+        status(`Not saved yet (${outbox().length} waiting): ${e.message}. Trying again shortly.`, 'bad');
+        clearTimeout(flushRetry); flushRetry = setTimeout(() => flush(), 20000);
+        return false;
+      } finally { flushing = null; }
+    })();
+    return flushing;
   }
 
   // ---------- render ----------
@@ -1116,9 +1151,7 @@
     try {
       const before = next?.made;
       const fresh = parseNext(await getNext());
-      if (stale(fresh)) return false; // the planner hasn't caught up yet: keep the step already shown
-      closedIds.clear();
-      next = fresh;
+      next = mask(fresh);
       render();
       status('');
       if (speakIfNew && next.made !== before && $('autospeak').checked) speak(next.say);
@@ -1247,27 +1280,30 @@
   }
   async function send() {
     const lines = pendingLines; pendingLines = [];
+    if (!lines.length) return;
     $('send').disabled = true;
-    setState('saving');
     try {
-      await appendInbox(lines);
-      setState('idle');
       $('pending').classList.add('hidden');
       const made = next?.made, snap = JSON.stringify(next); // made:: has minute resolution, so the content is compared too
       // The current step was reported done or skipped: the next one is already known, so show it and say it at once
-      // (the same text on screen and out loud). Anything else waits for the engine, then shows and says its answer.
+      // (the same text on screen and out loud), before the save even starts, so a quick second "Done" closes the
+      // right step. Anything else waits for the engine, then shows and says its answer.
       const closes = lastHandled?.closesCurrent || (next?.tasks?.length && lines.length === 1 && /^(done|skip):/.test(lines[0]) && next.tasks.every((id) => lines[0].includes(id)));
       let shownNow = null;
       const seq = ++sendSeq;
       if (closes && next) {
-        for (const id of next.tasks || []) closedIds.add(id);
-        const upNext = next.after[0];
-        shownNow = upNext ? `Saved. Next: ${upNext}.` : 'Saved. Nothing else is queued right now.';
-        // one step at a time: the next step, with its own tasks, so the next "Done" closes it too
-        next = { ...next, say: shownNow, step: upNext || '', tasks: (next.afterIds || [])[0] || [], after: next.after.slice(1), afterIds: (next.afterIds || []).slice(1), then: '' };
+        for (const id of next.tasks || []) closedIds.set(id, Date.now());
+        next = mask(next);
+        shownNow = next.say;
         render();
         if ($('autospeak').checked) speak(shownNow);
-      } else if ($('autospeak').checked) speak('Saved.');
+      }
+      setOutbox([...outbox(), ...lines]);
+      setState('saving');
+      const saved = await flush();
+      setState('idle');
+      if (!saved) return;
+      if (!closes && $('autospeak').checked) speak('Saved.');
       status('Saved. Updating…');
       if (MOCK) return status(`Saved (demo). Inbox: ${mockInbox.join(' | ')}`);
       const strip = (t) => (t || '').replace(/^(Saved|Rechecked)\. /, '');
@@ -1275,9 +1311,8 @@
         await new Promise((r) => setTimeout(r, 5000));
         if (seq !== sendSeq) return; // a newer report took over
         const fresh = parseNext(await getNext());
-        if ((fresh.made !== made || JSON.stringify(fresh) !== snap) && !stale(fresh)) {
-          closedIds.clear();
-          next = fresh; render(); status('Updated.');
+        if (fresh.made !== made || JSON.stringify(fresh) !== snap) {
+          next = mask(fresh); render(); status('Updated.');
           if ($('autospeak').checked) {
             if (next.attention.length) speak(`One thing needs your attention: ${next.attention[0]}`);
             else if (strip(next.say) !== strip(shownNow)) speak(next.say); // the engine's answer differs from what was shown: say the new one
@@ -1286,10 +1321,11 @@
         }
       }
       status('Saved. It will catch up on its next run.', 'warn');
-    } catch (e) { setState('idle'); pendingLines = lines; status(`Not saved: ${e.message}`, 'bad'); if ($('autospeak').checked) speak('Not saved.'); }
+    } catch (e) { setState('idle'); status(`Not saved: ${e.message}`, 'bad'); if ($('autospeak').checked) speak('Not saved.'); }
     finally { $('send').disabled = false; }
   }
   $('send').onclick = send;
+  if (!MOCK && outbox().length) setTimeout(() => flush(), 1500);
   // ---------- the made smoothie: its time on screen, a spoken reminder while the app is open, and a phone alert ----------
   let smoothieTimer = 0;
   const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
@@ -1594,6 +1630,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261014e"></script>
+<script src="music.js?v=20261015b"></script>
 </body>
 </html>

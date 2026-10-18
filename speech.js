@@ -441,6 +441,8 @@
     const bullets = (name) => section(name).split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2)));
     return {
       plan: section("Today's plan").split('**Not today:**')[0].split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
+      // under each step of Today's plan: why it sits above the one below it
+      planWhy: section("Today's plan").split('**Not today:**')[0].split('\n').reduce((acc, l) => { if (l.startsWith('- ')) acc.push(''); else if (/^\s+- why: /.test(l) && acc.length) acc[acc.length - 1] = l.replace(/^\s+- why: /, '').trim(); return acc; }, []),
       notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
       say: section('Say this'), after, afterIds, today: bullets('Still open today'), week: bullets('Coming up'),
@@ -451,13 +453,6 @@
       step: ((section('Now').match(/^- Do: (.*)$/m) || [])[1] || '').trim(),
       tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       why: ((section('Now').match(/^- Why: (.*)$/m) || [])[1] || '').trim(),
-      firm: /^- Firm: yes$/m.test(section('Now')),
-      // a real tie: these could go in any order ("Pick"), and what closes today ("Musts today")
-      pick: section('Pick').split('\n').filter((l) => l.startsWith('- ')).map((l) => {
-        const ids = ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-');
-        const [say, size] = l.slice(2).replace(/\s*\([A-Z0-9][A-Z0-9@#., -]*\)\s*$/, '').split(' | ');
-        return { say: (say || '').trim(), size: (size || '').trim(), ids };
-      }).filter((o) => o.ids.length),
       musts: bullets('Musts today'),
       day: { zone: field('zone'), windDown: field('wind_down'), bed: field('bed'), events: section('Day').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim()) }, saved: bullets('Last saved'),
       workout: (() => {

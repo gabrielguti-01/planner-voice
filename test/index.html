@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261018b"></script>
-<script src="test/sandbox.js?v=20261018b"></script>
+<script src="test/seed.js?v=20261018c"></script>
+<script src="test/sandbox.js?v=20261018c"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -813,7 +813,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261018b"></script>
+<script src="speech.js?v=20261018c"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1450,15 +1450,46 @@
     };
     document.body.appendChild(pop);
   }
+  // stopping part-way (user, 2026-10-16): a few exercises left go into the next session; most of it left means
+  // doing this session again next time (engine C.training.redo_min_missed, 3)
+  const REDO_MIN = 3;
+  function workoutFinish(w) {
+    const st = workoutStatus(w), left = st.ex.filter((e, i) => (st.done[i] || 0) < e.sets);
+    if (!left.length) return workoutConfirm(w, st.ex);
+    const redo = left.length >= REDO_MIN;
+    const pop = document.createElement('div'); pop.className = 'wk-pop';
+    const card = document.createElement('section'); card.className = 'card'; pop.appendChild(card);
+    const h = document.createElement('h2'); h.textContent = `Workout ${w.session}: ${left.length} left`; card.appendChild(h);
+    const p = document.createElement('p'); p.textContent = redo ? `Most of ${w.session} is left, so the plan is to do ${w.session} again next time.` : 'These go into your next session:'; card.appendChild(p);
+    const ul = document.createElement('ul'); for (const e of left) { const li = document.createElement('li'); li.textContent = `${e.name} — ${e.dose}`; ul.appendChild(li); } card.appendChild(ul);
+    const row = document.createElement('div'); row.className = 'row';
+    const carry = document.createElement('button'), again = document.createElement('button'), no = document.createElement('button');
+    carry.textContent = 'Carry them over'; again.textContent = `Redo ${w.session} next time`; no.textContent = 'Cancel';
+    (redo ? again : carry).className = 'primary';
+    for (const b of redo ? [again, carry, no] : [carry, again, no]) row.appendChild(b);
+    card.appendChild(row);
+    no.onclick = () => pop.remove();
+    const go = async (lines, msg) => {
+      pop.remove();
+      pendingLines = lines;
+      lastHandled = { closesCurrent: (next?.tasks || []).includes(w.gym) };
+      await send();
+      lastHandled = null;
+      status(msg);
+    };
+    carry.onclick = () => go([`done: ${w.gym}`, `workout: missed ${w.session} | ${left.map((e) => e.name).join('; ')}`], `Workout ${w.session} checked off; ${left.length} carried to the next session.`);
+    again.onclick = () => go([`skip: ${w.gym} | because only part of session ${w.session} was done; redo it next time`], `Next time is ${w.session} again.`);
+    document.body.appendChild(pop);
+  }
   function drawWorkout() {
     const w = next?.workout;
     $('workoutBox').classList.toggle('hidden', !w);
-    const onStep = !!w && w.state === 'training' && (next.tasks || []).some((id) => /^GYM@/.test(id));
+    const onStep = !!w && (w.state === 'training' || w.state === 'recovery') && (next.tasks || []).some((id) => /^GYM@/.test(id));
     $('workoutLine').classList.toggle('hidden', !onStep);
     const box = $('workout');
     box.innerHTML = '';
     if (!w) return;
-    const checklist = w.state === 'training' || ahead(w);
+    const checklist = w.state === 'training' || w.state === 'recovery' || ahead(w);
     const st = checklist ? workoutStatus(w) : null;
     if (onStep) $('workoutText').textContent = st && st.finished ? `Workout ${w.session}: ${st.text}` : `Workout ${w.session}: ${w.title}`;
     const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
@@ -1466,6 +1497,7 @@
       const bar = el('div', null, 'progress');
       bar.appendChild(el('span', st.text));
       if (st.done.some((x) => x)) { const r = el('button', 'Clear'); r.onclick = () => { store.set(workoutKey(w), '[]'); drawWorkout(); }; bar.appendChild(r); }
+      if (!ahead(w) && w.gym && st.next >= 0 && st.done.some((x) => x)) { const f = el('button', 'Finish workout'); f.onclick = () => workoutFinish(w); bar.appendChild(f); }
       box.appendChild(bar);
     }
     let list = null, exi = 0;
@@ -1645,6 +1677,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261018b"></script>
+<script src="music.js?v=20261018c"></script>
 </body>
 </html>

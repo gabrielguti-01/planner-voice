@@ -450,6 +450,15 @@
       then: ((section('Now').match(/^- Then: (.*)$/m) || [])[1] || '').trim(),
       step: ((section('Now').match(/^- Do: (.*)$/m) || [])[1] || '').trim(),
       tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
+      why: ((section('Now').match(/^- Why: (.*)$/m) || [])[1] || '').trim(),
+      firm: /^- Firm: yes$/m.test(section('Now')),
+      // a real tie: these could go in any order ("Pick"), and what closes today ("Musts today")
+      pick: section('Pick').split('\n').filter((l) => l.startsWith('- ')).map((l) => {
+        const ids = ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-');
+        const [say, size] = l.slice(2).replace(/\s*\([A-Z0-9][A-Z0-9@#., -]*\)\s*$/, '').split(' | ');
+        return { say: (say || '').trim(), size: (size || '').trim(), ids };
+      }).filter((o) => o.ids.length),
+      musts: bullets('Musts today'),
       day: { zone: field('zone'), windDown: field('wind_down'), bed: field('bed'), events: section('Day').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim()) }, saved: bullets('Last saved'),
       workout: (() => {
         const w = section('Workout');

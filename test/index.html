@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261015b"></script>
-<script src="test/sandbox.js?v=20261015b"></script>
+<script src="test/seed.js?v=20261018a"></script>
+<script src="test/sandbox.js?v=20261018a"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -194,6 +194,15 @@
   .mu-help li, .mu-diag li { margin:0 0 8px; }
   .mu-diag li.ok::marker { content:'✓  '; } .mu-diag li.bad::marker { content:'✗  '; } .mu-diag li.tip::marker { content:'→  '; }
   .step-actions, .confirm { margin-top:14px; }
+  .why-line { margin-top:8px; }
+  .pick { margin-top:12px; }
+  .pick-list { display:grid; gap:8px; margin-top:8px; }
+  .pick-opt { display:flex; justify-content:space-between; align-items:center; gap:10px; text-align:left; padding:11px 12px; font-size:15px; }
+  .pick-opt .sz { flex:0 0 auto; font:400 11px/1 var(--mono); color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+  .pick-opt[aria-current="true"] { box-shadow:inset 0 0 0 1px var(--p); }
+  .musts { margin-top:12px; }
+  .break-box { margin-top:14px; }
+  .break-box p { margin:0 0 10px; }
   .smoothie-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:14px; }
   .smoothie-line button { flex:0 0 auto; padding:9px 12px; }
   .workout h3 { margin:14px 0 6px; font-size:15px; letter-spacing:.02em; color:var(--p); }
@@ -619,10 +628,15 @@
     <div class="smoothie-line hidden" id="shopLine"><span id="shopText"></span><button id="shopShow" class="mu-small">Open the list</button></div>
     <div class="smoothie-line hidden" id="workoutLine"><span id="workoutText"></span><button id="workoutShow" class="mu-small">See the workout</button></div>
     <div class="smoothie-line hidden" id="smoothieLine"><span id="smoothieText"></span><button id="smoothieAlert" class="mu-small">Phone alert</button></div>
+    <div class="meta why-line hidden" id="whyLine"></div>
+    <div class="pick hidden" id="pickBox"><div class="meta">Any order is fine. Pick one:</div><div class="pick-list" id="pickList"></div></div>
     <div class="row step-actions hidden" id="stepActions">
       <button id="doneBtn" class="primary">Done</button>
       <button id="skipBtn">Skip</button>
+      <button id="breakBtn">Break</button>
     </div>
+    <div class="break-box hidden" id="breakBox"><p id="breakText"></p><div class="row"><button id="readyBtn" class="primary">I'm ready</button></div></div>
+    <div class="meta musts hidden" id="mustsLine"></div>
     <div class="confirm hidden" id="confirmBox">
       <p id="confirmText"></p>
       <div class="row"><button id="confirmYes" class="primary">Yes</button><button id="confirmFridge" class="hidden">In the fridge</button><button id="confirmNo">No</button></div>
@@ -810,7 +824,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261015b"></script>
+<script src="speech.js?v=20261018a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -826,6 +840,10 @@
   // a plan with the steps already closed here taken out: the first open one becomes the step on screen
   function mask(n) {
     if (!n) return n;
+    n = { ...n, pick: (n.pick || []).filter((o) => !allClosed(o.ids)) };
+    const pk = picked();
+    if (pk && !allClosed(pk.ids) && !(n.tasks || []).some((id) => pk.ids.includes(id)) && n.made === pk.base)
+      n = { ...n, say: `Next: ${pk.say}.`, step: pk.say, tasks: pk.ids, why: 'you picked this one', firm: true, then: '' };
     const pairs = (n.after || []).map((a, i) => [a, (n.afterIds || [])[i] || []]).filter(([, ids]) => !allClosed(ids));
     const base = { ...n, after: pairs.map((p) => p[0]), afterIds: pairs.map((p) => p[1]) };
     if (!allClosed(n.tasks)) return base;
@@ -1120,17 +1138,18 @@
       const m = shown.match(/^((?:Saved\. )?.*?[.!?])(\s+[A-Z][\s\S]*)?$/);
       shown = (m ? m[1] : shown) + ' Then: ' + next.then.charAt(0).toLowerCase() + next.then.slice(1) + '.' + (m && m[2] ? m[2] : '');
     }
-    $('say').textContent = shown;
+    $('say').textContent = onBreak() ? 'On a break.' : shown;
     smoothieClock();
     drawWorkout();
     const canMark = !!(next.tasks && next.tasks.length);
     if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
-    $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
+    $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind || onBreak());
+    drawChoice();
     drawDay();
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
     $('gauge').dataset.level = lvl || '';
-    $('gauge').textContent = (lvl === 'tight' || lvl === 'critical') && fu && fu !== 'open' ? lvl + ' · free until ' + clockText(new Date(fu.replace(' ', 'T')).getTime()) : '';
+    $('gauge').textContent = ''; // no "free until" clock on the screen: it adds stress (user, 2026-10-18)
     $('meta').textContent = next.brainDead ? 'brain-dead mode' : next.tired ? 'tired mode' : '';
     const fill = (id, arr, empty) => { $(id).innerHTML = ''; for (const t of (arr.length ? arr : [empty])) { const li = document.createElement('li'); li.textContent = t; $(id).appendChild(li); } };
     fill('after', next.after, 'Nothing queued.');
@@ -1522,6 +1541,40 @@
     status('Opening your calendar: tap Add to get an alert 20 minutes before.');
   };
 
+  // ---------- a real tie: pick any; a break: see what's next, with no clock ----------
+  const picked = () => { try { const v = JSON.parse(store.get('picked', 'null')); return v && Date.now() - v.at < 10 * 60e3 ? v : null; } catch { return null; } };
+  const onBreak = () => { const t = +store.get('breakAt', '0'); return t > 0 && Date.now() - t < 12 * 3600e3; };
+  function drawChoice() {
+    const br = onBreak(), has = !!(next.tasks && next.tasks.length);
+    const tie = has && !br && !next.firm && (next.pick || []).length > 1;
+    const why = has && !br && !tie && next.why ? 'First because: ' + next.why.charAt(0).toLowerCase() + next.why.slice(1) + '.' : '';
+    $('whyLine').textContent = why;
+    $('whyLine').classList.toggle('hidden', !why);
+    $('pickBox').classList.toggle('hidden', !tie);
+    $('pickList').innerHTML = '';
+    if (tie) for (const o of next.pick) {
+      const b = document.createElement('button'), s = document.createElement('span'), z = document.createElement('span');
+      b.className = 'pick-opt'; b.setAttribute('aria-current', String(o.ids.some((id) => next.tasks.includes(id))));
+      s.textContent = o.say; z.className = 'sz'; z.textContent = o.size + (b.getAttribute('aria-current') === 'true' ? ' · now' : '');
+      b.append(s, z); b.onclick = () => pick(o);
+      $('pickList').appendChild(b);
+    }
+    $('breakBox').classList.toggle('hidden', !br);
+    if (br) $('breakText').textContent = has ? `When you're ready, next is: ${next.step}.` : 'Nothing is queued right now.';
+    const musts = next.musts || [];
+    $('mustsLine').textContent = musts.length ? "Today's musts: " + musts.join(' · ') + '. Nothing else closes today.' : '';
+    $('mustsLine').classList.toggle('hidden', !musts.length || br);
+  }
+  function pick(o) {
+    if (!next || o.ids.some((id) => next.tasks.includes(id))) return;
+    store.set('picked', JSON.stringify({ ids: o.ids, say: o.say, at: Date.now(), base: next.made }));
+    next = mask(next);
+    render();
+    appendInbox([`first: ${o.ids[0]}`]).then(() => status(`Picked: ${o.say}.`)).catch((e) => status('Could not save the pick: ' + e.message, 'bad'));
+  }
+  $('breakBtn').onclick = () => { store.set('breakAt', String(Date.now())); render(); };
+  $('readyBtn').onclick = () => { store.set('breakAt', '0'); render(); if ($('autospeak').checked && next?.say) speak(next.say); };
+
   // ---------- Done / Skip buttons: one tap, then "are you sure?", then Yes (for when talking out loud isn't an option) ----------
   const closeConfirm = () => { confirmKind = null; $('confirmBox').classList.add('hidden'); $('stepActions').classList.toggle('hidden', !(next?.tasks || []).length); };
   // the step is the smoothie waiting to be finished (not one that has gone bad): "done" could mean either
@@ -1632,6 +1685,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261015b"></script>
+<script src="music.js?v=20261018a"></script>
 </body>
 </html>

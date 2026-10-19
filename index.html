@@ -199,6 +199,14 @@
   #toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:60; display:flex; align-items:center; gap:12px; max-width:calc(100% - 32px); padding:10px 14px; border-radius:12px; background:rgba(0,0,0,.82); color:#fff; font-size:14px; box-shadow:0 6px 18px rgba(0,0,0,.4); }
   #toast button { padding:6px 10px; }
   .coming { margin-top:10px; background:none; border:0; padding:4px 0; color:var(--dim); font:400 13px/1.3 var(--mono); text-align:left; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+  .notes-line { margin-top:10px; }
+  .notes-panel { margin-top:10px; }
+  .notes-panel details { border-top:1px solid rgba(255,255,255,.12); padding:8px 0; }
+  .notes-panel summary { cursor:pointer; font-weight:600; }
+  .notes-panel ul { margin:6px 0 0; padding-left:18px; }
+  .notes-panel li { margin:4px 0; line-height:1.35; }
+  .notes-panel li.now { font-weight:700; }
+  .notes-panel li.done { opacity:.6; text-decoration:line-through; }
   #plan .why { display:block; margin-top:2px; font:400 12px/1.35 var(--mono); color:var(--dim); }
   .smoothie-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:14px; }
   .smoothie-line button { flex:0 0 auto; padding:9px 12px; }
@@ -630,6 +638,8 @@
       <button id="skipBtn">Skip</button>
     </div>
     <div class="meta musts hidden" id="mustsLine"></div>
+    <button class="coming hidden notes-line" id="notesBtn"></button>
+    <div class="notes-panel hidden" id="notesPanel"></div>
     <button class="coming" id="comingBtn">What's coming up today ›</button>
     <div class="confirm hidden" id="confirmBox">
       <p id="confirmText"></p>
@@ -819,7 +829,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261019a"></script>
+<script src="speech.js?v=20261019c"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1146,6 +1156,7 @@
     if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
     $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
     drawMusts();
+    drawNotes();
     drawDay();
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
@@ -1208,6 +1219,31 @@
     lastHandled = { closesCurrent: false };
     send().finally(() => { lastHandled = null; });
   }
+  // notes for the step on screen: a workflow's steps and the notes by heading, each heading folded until opened
+  let notesOpen = false;
+  function drawNotes() {
+    const n = (next?.notes || []).find((b) => (next.tasks || []).includes(b.id)), has = !!(n && (n.groups.length || n.step));
+    $('notesBtn').classList.toggle('hidden', !has);
+    if (!has) { $('notesPanel').classList.add('hidden'); return; }
+    const count = n.groups.filter((g) => !/^steps$/i.test(g.name)).length;
+    $('notesBtn').textContent = (n.step ? `Step ${n.step.replace('/', ' of ')} · ${n.title}` : n.title) + (count ? ` · notes (${count}) ` : ' ') + (notesOpen ? '▾' : '›');
+    const p = $('notesPanel'); p.innerHTML = '';
+    p.classList.toggle('hidden', !notesOpen);
+    for (const g of n.groups) {
+      const d = document.createElement('details'), s = document.createElement('summary'), ul = document.createElement('ul');
+      s.textContent = /^steps$/i.test(g.name) ? 'Steps' : `${g.name} (${g.lines.length})`;
+      if (/^steps$/i.test(g.name)) d.open = true;
+      for (const l of g.lines) {
+        const li = document.createElement('li');
+        const m = l.match(/^\[(x| )\] (.*?)( ← now)?$/);
+        li.textContent = m ? m[2] : l;
+        if (m) li.className = m[3] ? 'now' : m[1] === 'x' ? 'done' : '';
+        ul.appendChild(li);
+      }
+      d.appendChild(s); d.appendChild(ul); p.appendChild(d);
+    }
+  }
+  $('notesBtn').onclick = () => { notesOpen = !notesOpen; drawNotes(); };
   $('comingBtn').onclick = () => { drawer(true); $('planBox').open = true; setTimeout(() => $('planBox').scrollIntoView?.({ behavior: 'smooth' }), 80); };
 
   async function refresh(speakIfNew = false) {
@@ -1733,6 +1769,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261019a"></script>
+<script src="music.js?v=20261019c"></script>
 </body>
 </html>

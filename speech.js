@@ -442,6 +442,8 @@
     return {
       plan: section("Today's plan").split('**Not today:**')[0].split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       // under each step of Today's plan: why it sits above the one below it
+      planIds: section("Today's plan").split('**Not today:**')[0].split('\n').filter((l) => l.startsWith('- ')).map((l) => ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
+      todayIds: section('Still open today').split('\n').filter((l) => l.startsWith('- ')).map((l) => ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       planWhy: section("Today's plan").split('**Not today:**')[0].split('\n').reduce((acc, l) => { if (l.startsWith('- ')) acc.push(''); else if (/^\s+- why: /.test(l) && acc.length) acc[acc.length - 1] = l.replace(/^\s+- why: /, '').trim(); return acc; }, []),
       notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',

@@ -456,6 +456,11 @@
       tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       why: ((section('Now').match(/^- Why: (.*)$/m) || [])[1] || '').trim(),
       musts: bullets('Musts today'),
+      projects: section('Projects').split(/\n(?=### )/).filter((b) => /^### /.test(b)).map((b) => ({
+        name: b.match(/^### (.*)$/m)[1].trim(),
+        every: ((b.match(/^every::\s*(.*)$/m) || [])[1] || '').trim(),
+        steps: b.split('\n').filter((l) => l.startsWith('- ')).map((l) => ({ text: clean(l.slice(2)), ids: ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter(Boolean) })),
+      })),
       library: section('Library').split('\n').filter((l) => l.startsWith('- ')).map((l) => { const [id, title, n] = l.slice(2).split(' | ').map((x) => (x || '').trim()); return { id, title: title || id, sections: +n || 0 }; }),
       notes: section('Notes').split(/\n(?=### )/).filter((b) => /^### /.test(b)).map((b) => {
         const f = (k) => ((b.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '').trim();

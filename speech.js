@@ -456,6 +456,7 @@
       tasks: (((section('Now').match(/^- Tasks: (.*)$/m) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       why: ((section('Now').match(/^- Why: (.*)$/m) || [])[1] || '').trim(),
       musts: bullets('Musts today'),
+      library: section('Library').split('\n').filter((l) => l.startsWith('- ')).map((l) => { const [id, title, n] = l.slice(2).split(' | ').map((x) => (x || '').trim()); return { id, title: title || id, sections: +n || 0 }; }),
       notes: section('Notes').split(/\n(?=### )/).filter((b) => /^### /.test(b)).map((b) => {
         const f = (k) => ((b.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '').trim();
         const groups = [];
@@ -465,7 +466,7 @@
           if (h) { cur = { name: h[1].trim(), lines: [] }; groups.push(cur); continue; }
           if (cur && /^- /.test(l)) cur.lines.push(l.slice(2).trim());
         }
-        return { id: b.match(/^### (.*)$/m)[1].trim(), key: f('for'), title: f('title'), step: f('step'), groups };
+        return { id: b.match(/^### (.*)$/m)[1].trim(), key: f('for'), title: f('title'), step: f('step'), library: f('library'), groups };
       }),
       day: { zone: field('zone'), windDown: field('wind_down'), bed: field('bed'), events: section('Day').split('\n').filter((l) => l.startsWith('- ')).map((l) => l.slice(2).trim()) }, saved: bullets('Last saved'),
       workout: (() => {

@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261019c"></script>
-<script src="test/sandbox.js?v=20261019c"></script>
+<script src="test/seed.js?v=20261019d"></script>
+<script src="test/sandbox.js?v=20261019d"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -682,6 +682,7 @@
   <details class="card" id="afterBox"><summary>After this one</summary><ol id="after"></ol></details>
   <details class="card hidden" id="workoutBox"><summary>Today's workout</summary><div id="workout" class="workout"></div></details>
   <div id="toast" class="hidden" role="status"><span id="toastText"></span><button id="toastUndo">Undo</button></div>
+  <details class="card hidden" id="libraryBox"><summary>Library</summary><div id="library" class="notes-panel"></div></details>
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
@@ -831,13 +832,17 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261019c"></script>
+<script src="speech.js?v=20261019d"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
   const { toCommands, parseNext } = PlannerSpeech;
   const MOCK = new URLSearchParams(location.search).has('mock');
+  // Voice in and out are set aside (user, 2026-10-19: "I don't like the voice"). The code stays as a block for later:
+  // it is on only with ?voice=1 in the address (or the stored voiceOn switch), which is how its tests run.
+  const voiceWanted = () => new URLSearchParams(location.search).has('voice') || (() => { try { return localStorage.getItem('planner.voiceOn') === '1'; } catch { return false; } })();
   const store = { get: (k, d = '') => { try { return localStorage.getItem('planner.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('planner.' + k, v); } catch {} } };
+  const VOICE = voiceWanted();
   let next = null, pendingLines = [], lastSpoken = '', lastHandled = null, confirmKind = null; // confirmKind: the Done/Skip question that is open
   // steps closed here that the planner may not have applied yet: id → when (kept 10 minutes)
   const closedIds = new Map(); let sendSeq = 0;
@@ -1159,6 +1164,7 @@
     $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
     drawMusts();
     drawNotes();
+    drawLibrary();
     drawDay();
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
@@ -1244,8 +1250,50 @@
       }
       d.appendChild(s); d.appendChild(ul); p.appendChild(d);
     }
+    if (n.library) { const b = document.createElement('button'); b.className = 'coming'; b.textContent = 'More to know ›'; b.onclick = () => openTopic(n.library); p.appendChild(b); }
   }
   $('notesBtn').onclick = () => { notesOpen = !notesOpen; drawNotes(); };
+  // ---------- the library: topics kept on hand; a topic's page is read from the planner when opened ----------
+  async function getFile(path) {
+    if (MOCK) return '# Example topic\n\n## Good to know\n\n- An example line.\n';
+    const r = await api(path);
+    if (!r.ok) throw new Error(`Could not read ${path} (${r.status}).`);
+    return b64decode((await r.json()).content);
+  }
+  function drawLibrary() {
+    const topics = next?.library || [];
+    $('libraryBox').classList.toggle('hidden', !topics.length);
+    const box = $('library');
+    if (box.dataset?.open) return; // a page is open: keep it
+    box.innerHTML = '';
+    for (const t of topics) {
+      const b = document.createElement('button'); b.className = 'coming'; b.textContent = `${t.title} ›`;
+      b.onclick = () => openTopic(t.id);
+      box.appendChild(b);
+    }
+  }
+  async function openTopic(id) {
+    const box = $('library');
+    drawer(true); $('libraryBox').open = true;
+    box.innerHTML = '';
+    if (box.dataset) box.dataset.open = id;
+    let text = '';
+    try { text = await getFile(`state/library/${id}.md`); } catch (e) { status(e.message, 'bad'); }
+    const back = document.createElement('button'); back.className = 'coming'; back.textContent = '‹ All topics';
+    back.onclick = () => { if (box.dataset) delete box.dataset.open; drawLibrary(); };
+    box.appendChild(back);
+    const h = document.createElement('h3'); h.textContent = (text.match(/^# (.*)$/m) || [])[1] || id; box.appendChild(h);
+    let d = null, ul = null;
+    for (const raw of text.split('\n')) {
+      const l = raw.trim();
+      const m = l.match(/^## (.*)$/);
+      if (m) { d = document.createElement('details'); const s = document.createElement('summary'); s.textContent = m[1]; d.appendChild(s); box.appendChild(d); ul = null; continue; }
+      if (!d || !l || /^[a-z_]+::/.test(l) || /^# /.test(l)) continue;
+      if (/^[-*] /.test(l)) { if (!ul) { ul = document.createElement('ul'); d.appendChild(ul); } const li = document.createElement('li'); li.textContent = l.slice(2); ul.appendChild(li); }
+      else { ul = null; const p = document.createElement('p'); p.textContent = l; d.appendChild(p); }
+    }
+    setTimeout(() => $('libraryBox').scrollIntoView?.({ behavior: 'smooth' }), 80);
+  }
   $('comingBtn').onclick = () => { drawer(true); $('planBox').open = true; setTimeout(() => $('planBox').scrollIntoView?.({ behavior: 'smooth' }), 80); };
 
   async function refresh(speakIfNew = false) {
@@ -1312,7 +1360,7 @@
   $('voice').onchange = () => store.set('voice', $('voice').value);
   $('voiceTest').onclick = () => speak('Next: water the plants. Then take a breath, you are doing fine.');
   function speak(text) {
-    if (!('speechSynthesis' in window) || !text) return;
+    if (!VOICE || !('speechSynthesis' in window) || !text) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text.replace(/[`*_#]/g, '').replace(/\s*\([A-Z0-9][A-Z0-9@#.-]+\)/g, ''));
     const want = store.get('voice', 'auto');
@@ -1717,7 +1765,7 @@
   $('typed').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('typedGo').click(); });
 
   // ---------- voice in ----------
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SR = VOICE ? window.SpeechRecognition || window.webkitSpeechRecognition : null;
   const talk = $('talk');
   if (!SR) { talk.textContent = 'Voice input not supported here'; talk.disabled = true; }
   else {
@@ -1763,7 +1811,12 @@
     };
   }
 
-  $('core').onclick = () => { if (talk.onclick && !talk.disabled) talk.onclick(); else if ($('typed').focus) $('typed').focus(); };
+  $('core').onclick = () => { if (VOICE && talk.onclick && !talk.disabled) talk.onclick(); else { drawer(true); if ($('typed').focus) $('typed').focus(); } };
+  if (!VOICE) { // the voice controls leave the screen; tapping the compass opens the typing box instead
+    for (const id of ['talk', 'speak', 'voiceTest', 'voice', 'rate']) $(id).classList.add('hidden');
+    for (const id of ['autospeak']) if ($(id).parentNode?.classList) $(id).parentNode.classList.add('hidden');
+    const h = document.querySelector?.('#core .heart span'); if (h) h.textContent = '';
+  }
 
   drawDay();
   refresh();
@@ -1771,6 +1824,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261019c"></script>
+<script src="music.js?v=20261019d"></script>
 </body>
 </html>

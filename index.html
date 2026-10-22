@@ -205,6 +205,12 @@
   .notes-panel summary { cursor:pointer; font-weight:600; }
   .notes-panel ul { margin:6px 0 0; padding-left:18px; }
   .notes-panel li { margin:4px 0; line-height:1.35; }
+  .goal { margin:8px 0 12px; }
+  .goal .gname { display:flex; justify-content:space-between; gap:10px; font-weight:600; }
+  .goal .gpct { font-variant-numeric:tabular-nums; opacity:.85; }
+  .goal .gbar { height:4px; margin:6px 0 4px; background:rgba(255,255,255,.12); border-radius:2px; overflow:hidden; }
+  .goal .gbar i { display:block; height:100%; background:rgb(var(--gold-rgb, 201,160,100)); }
+  .goal .gdetail { font-size:.9em; opacity:.8; line-height:1.35; }
   .notes-panel li.now { font-weight:700; }
   .notes-panel li.done { opacity:.6; text-decoration:line-through; }
   #plan .why { display:block; margin-top:2px; font:400 12px/1.35 var(--mono); color:var(--dim); }
@@ -680,6 +686,7 @@
   <details class="card" id="afterBox"><summary>After this one</summary><ol id="after"></ol></details>
   <details class="card hidden" id="workoutBox"><summary>Today's workout</summary><div id="workout" class="workout"></div></details>
   <div id="toast" class="hidden" role="status"><span id="toastText"></span><button id="toastUndo">Undo</button></div>
+  <details class="card hidden" id="goalsBox"><summary>Goals</summary><div id="goals" class="notes-panel"></div></details>
   <details class="card hidden" id="projectsBox"><summary>Projects</summary><div id="projects" class="notes-panel"></div></details>
   <details class="card hidden" id="libraryBox"><summary>Library</summary><div id="library" class="notes-panel"></div></details>
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
@@ -831,7 +838,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261019e"></script>
+<script src="speech.js?v=20261022a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1164,13 +1171,14 @@
     drawMusts();
     drawNotes();
     drawLibrary();
+    drawGoals();
     drawProjects();
     drawDay();
     const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
     $('gauge').dataset.level = lvl || '';
     $('gauge').textContent = ''; // no "free until" clock on the screen: it adds stress (user, 2026-10-18)
-    $('meta').textContent = next.brainDead ? 'brain-dead mode' : next.tired ? 'tired mode' : '';
+    $('meta').textContent = next.exam ? 'exam mode' : next.brainDead ? 'brain-dead mode' : next.tired ? 'tired mode' : '';
     const fill = (id, arr, empty) => { $(id).innerHTML = ''; for (const t of (arr.length ? arr : [empty])) { const li = document.createElement('li'); li.textContent = t; $(id).appendChild(li); } };
     fill('after', next.after, 'Nothing queued.');
     $('afterBox').open = false; // one thing at a time: the rest stays folded until asked for
@@ -1253,6 +1261,31 @@
     if (n.library) { const b = document.createElement('button'); b.className = 'coming'; b.textContent = 'More to know ›'; b.onclick = () => openTopic(n.library); p.appendChild(b); }
   }
   $('notesBtn').onclick = () => { notesOpen = !notesOpen; drawNotes(); };
+  // ---------- goals: how close each one is (definitions/goals.md, measured by the engine) ----------
+  function drawGoals() {
+    const gs = next?.goals || [];
+    $('goalsBox').classList.toggle('hidden', !gs.length);
+    const box = $('goals'); box.innerHTML = '';
+    const groups = [...new Set(gs.map((g) => g.group))];
+    for (const name of groups) {
+      const d = document.createElement('details'), s = document.createElement('summary');
+      s.textContent = name; d.appendChild(s);
+      for (const g of gs.filter((x) => x.group === name)) {
+        const row = document.createElement('div'); row.className = 'goal';
+        const top = document.createElement('div'); top.className = 'gname';
+        const t = document.createElement('span'); t.textContent = g.name; top.appendChild(t);
+        const p = document.createElement('span'); p.className = 'gpct'; p.textContent = g.percent == null ? '' : g.percent + '%'; top.appendChild(p);
+        row.appendChild(top);
+        if (g.percent != null) {
+          const bar = document.createElement('div'); bar.className = 'gbar';
+          const fill = document.createElement('i'); if (fill.style) fill.style.width = g.percent + '%'; bar.appendChild(fill); row.appendChild(bar);
+        }
+        const det = document.createElement('div'); det.className = 'gdetail'; det.textContent = g.detail; row.appendChild(det);
+        d.appendChild(row);
+      }
+      box.appendChild(d);
+    }
+  }
   // ---------- each project's own plan, folded per project; a ✓ marks a step done at once ----------
   function drawProjects() {
     const ps = (next?.projects || []).map((p) => ({ ...p, steps: p.steps.filter((s) => !allClosed(s.ids)) }));
@@ -1847,6 +1880,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261019e"></script>
+<script src="music.js?v=20261022a"></script>
 </body>
 </html>

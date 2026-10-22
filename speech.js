@@ -446,7 +446,7 @@
       todayIds: section('Still open today').split('\n').filter((l) => l.startsWith('- ')).map((l) => ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
       planWhy: section("Today's plan").split('**Not today:**')[0].split('\n').reduce((acc, l) => { if (l.startsWith('- ')) acc.push(''); else if (/^\s+- why: /.test(l) && acc.length) acc[acc.length - 1] = l.replace(/^\s+- why: /, '').trim(); return acc; }, []),
       notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
-      made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on',
+      made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on', exam: field('exam') === 'on',
       say: section('Say this'), after, afterIds, today: bullets('Still open today'), week: bullets('Coming up'),
       attention: bullets('Needs your attention'), late: bullets('Late or waiting'), groceries: bullets('Groceries'),
       // from the Groceries section itself ("for::" also appears elsewhere in next.md)
@@ -461,6 +461,10 @@
         every: ((b.match(/^every::\s*(.*)$/m) || [])[1] || '').trim(),
         steps: b.split('\n').filter((l) => l.startsWith('- ')).map((l) => ({ text: clean(l.slice(2)), ids: ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter(Boolean) })),
       })),
+      goals: section('Goals').split(/\n(?=### )/).filter((b) => /^### /.test(b)).map((b) => {
+        const f = (k) => ((b.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '').trim();
+        return { name: b.match(/^### (.*)$/m)[1].trim(), group: f('group'), percent: f('percent') === '-' || f('percent') === '' ? null : +f('percent'), detail: f('detail') };
+      }),
       library: section('Library').split('\n').filter((l) => l.startsWith('- ')).map((l) => { const [id, title, n] = l.slice(2).split(' | ').map((x) => (x || '').trim()); return { id, title: title || id, sections: +n || 0 }; }),
       notes: section('Notes').split(/\n(?=### )/).filter((b) => /^### /.test(b)).map((b) => {
         const f = (k) => ((b.match(new RegExp(`^${k}::\\s*(.*)$`, 'm')) || [])[1] || '').trim();

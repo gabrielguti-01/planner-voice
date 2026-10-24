@@ -692,7 +692,7 @@
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
-  <details class="card hidden" id="groceryBox"><summary>Grocery list</summary><div id="groceries" class="shop"></div></details>
+  <details class="card hidden" id="groceryBox"><summary>Grocery and shopping list</summary><div id="groceries" class="shop"></div></details>
   <details class="card" id="weekBox"><summary>Coming up this week</summary><ul id="week"></ul></details>
 
   <details class="card" id="settings">
@@ -838,7 +838,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261022a"></script>
+<script src="speech.js?v=20261024a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1536,9 +1536,9 @@
   let smoothieTimer = 0;
   const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
   // ---------- the shopping checklist ----------
-  // "Steak: 7 (have 4, …)" → { name: 'Steak', qty: '7' }; "Extra: Diet coke" → { name: 'Diet coke', extra: true }
+  // "Steak: 7 (have 4, …)" → { name: 'Steak', qty: '7' }; "Other: Super glue" → { name: 'Super glue', extra: true } (the one-off list)
   const groceryItems = () => (next?.groceries || []).filter((x) => !/^_/.test(x)).map((line) => {
-    const extra = /^Extra:\s*/i.test(line), rest = line.replace(/^Extra:\s*/i, '').replace(/\s*\([^()]*\)\s*$/, '');
+    const extra = /^(Extra|Other):\s*/i.test(line), rest = line.replace(/^(Extra|Other):\s*/i, '').replace(/\s*\([^()]*\)\s*$/, '');
     const m = rest.match(/^(.*?):\s*(.+)$/);
     const name = (m ? m[1] : rest).trim(), qty = m ? m[2].replace(/^up to\s+/i, '').trim() : '';
     return { name, qty, extra };
@@ -1562,10 +1562,13 @@
       const b = el('button', got.has(x.name) ? '✓' : '', 'tick');
       b.setAttribute('aria-label', `${x.name}${got.has(x.name) ? ', picked up' : ''}`);
       b.onclick = () => { const s = shopChecked(); s.has(x.name) ? s.delete(x.name) : s.add(x.name); shopSave(s); drawGroceries(); };
-      const t = el('div', null, 'name'); t.appendChild(el('span', x.extra ? `${x.name} (extra)` : x.name)); if (x.qty) t.appendChild(el('span', x.qty, 'qty'));
+      const t = el('div', null, 'name'); t.appendChild(el('span', x.name)); if (x.qty) t.appendChild(el('span', x.qty, 'qty'));
       r.appendChild(b); r.appendChild(t); return r;
     };
-    for (const x of items.filter((x) => !got.has(x.name))) box.appendChild(row(x));
+    // two lists: Aldi (the week's food) and other things, bought when you can afford them
+    const food = items.filter((x) => !x.extra && !got.has(x.name)), other = items.filter((x) => x.extra && !got.has(x.name));
+    if (food.length) { if (other.length) box.appendChild(el('p', 'Grocery list: Aldi, the week\'s food', 'group')); for (const x of food) box.appendChild(row(x)); }
+    if (other.length) { box.appendChild(el('p', 'Shopping list: when you can afford it', 'group')); for (const x of other) box.appendChild(row(x)); }
     if (picked) { box.appendChild(el('p', 'Picked up', 'group')); for (const x of items.filter((x) => got.has(x.name))) box.appendChild(row(x)); }
     const act = el('div', null, 'actions');
     if (!shopConfirming) { const d = el('button', 'Done shopping', 'primary'); d.onclick = () => { shopConfirming = true; drawGroceries(); }; act.appendChild(d); }
@@ -1880,6 +1883,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261022a"></script>
+<script src="music.js?v=20261024a"></script>
 </body>
 </html>

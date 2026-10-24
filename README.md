@@ -1,6 +1,8 @@
 # To-Do
 
-A single static page that reads a planner's next step aloud and turns speech into short text commands. It contains no data. Each person connects it to their own private repository with their own access token, which stays in their browser.
+A single static page that shows a planner's next step and today's plan, and lets you check things off. It contains no data. Each person connects it to their own private planner repository with their own access token, which stays in their browser.
+
+On the screen: the next step with Done and Skip, today's plan with the reason for each step, the projects, goals, notes and library, and the grocery and shopping lists.
 
 Demo with sample data: add `?mock=1` to the address.
 

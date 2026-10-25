@@ -324,6 +324,14 @@
       // the made smoothie
       if (/\bsmoothie\b/i.test(s) && /\b(?:fridge|refrigerator|refrigerated)\b/i.test(s)) { out.commands.push('smoothie: fridge'); continue; }
       if (/\bsmoothie\b/i.test(s) && /\b(?:threw|throw|tossed|toss|poured|pour|dumped|dump)\b|\bsmoothie\b.*\bwent bad\b/i.test(s)) { out.commands.push('smoothie: thrown out'); continue; }
+      // a reply (user, 2026-10-24): "Sam replied", "no reply from Sam", "Sam hasn't answered yet"
+      {
+        const checks = cur.filter((id) => /-REPLY$/.test(id));
+        const who = (w) => (/^(?:they|he|she|him|her|them|it)$/i.test(w) && checks.length ? checks.join(', ') : w);
+        if ((m = s.match(/^no (?:reply|answer|response)(?: yet)?(?: (?:from|back from) (.+?))?(?: yet)?$/i)) && (m[1] || checks.length)) { out.commands.push(`no reply: ${m[1] ? who(m[1]) : checks.join(', ')}`); if (!m[1]) out.closesCurrent = true; continue; }
+        if ((m = s.match(/^(.+?) (?:still )?(?:hasn'?t|has not|haven'?t|have not|didn'?t|did not) (?:replied|reply|answered|answer|responded|respond|written back|write back|gotten back to me|got back to me|get back to me)(?: yet)?$/i)) && !/^i$/i.test(m[1])) { out.commands.push(`no reply: ${who(m[1])}`); continue; }
+        if ((m = s.match(/^(.+?) (?:replied|answered|responded|wrote back|got back to me|texted back|emailed back)\b/i)) && !/^i$/i.test(m[1]) && !/\b(?:i|you|we)\b/i.test(m[1])) { out.commands.push(`replied: ${who(m[1])}`); continue; }
+      }
       // the workout, however it is said
       if (/^i (?:went to|hit|got back from) the gym$|^i (?:worked out|exercised|trained|did (?:my |a |the )?work ?out|finished (?:my |the )?work ?out)$/i.test(s)) { out.commands.push('done: gym'); continue; }
       // a machine that finished is not a report about a load: the planner says which load to move

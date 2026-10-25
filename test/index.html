@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261024a"></script>
-<script src="test/sandbox.js?v=20261024a"></script>
+<script src="test/seed.js?v=20261024b"></script>
+<script src="test/sandbox.js?v=20261024b"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -840,7 +840,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261024a"></script>
+<script src="speech.js?v=20261024b"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -1776,15 +1776,18 @@
   const smoothieAsk = () => (next?.tasks || []).some((id) => /^SMOOTHIE-FINISH@/.test(id)) && !/pour out/i.test(next.step || '') && next.smoothieKept !== 'fridge';
   // lunch is an avocado: one not eaten goes into the smoothie (user, 2026-10-14)
   const avocadoAsk = () => (next?.tasks || []).some((id) => /^LUNCH@/.test(id)) && /avocado/i.test(next.step || '') && !/no avocado/i.test(next.step || '');
+  // a reply check: Done asks whether they replied (user, 2026-10-24)
+  const replyAsk = () => (next?.tasks || []).some((id) => /-REPLY$/.test(id));
+  const replyWho = () => ((next?.step || '').match(/^Check if (.+?) replied/) || [])[1] || 'they';
   function askStep(kind) {
     if (!next?.tasks?.length) { status('There is no step to mark right now.', 'warn'); return; }
-    confirmKind = kind === 'done' && smoothieAsk() ? 'smoothie' : kind === 'done' && avocadoAsk() ? 'avocado' : kind;
+    confirmKind = kind === 'done' && smoothieAsk() ? 'smoothie' : kind === 'done' && avocadoAsk() ? 'avocado' : kind === 'done' && replyAsk() ? 'reply' : kind;
     const name = next.step || (next.say || '').replace(/^(?:Saved\. )?Next: /, '').replace(/[.]\s.*$/, '');
-    $('confirmText').textContent = confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : confirmKind === 'avocado' ? 'Did you eat the avocado?' : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
-    $('confirmYes').textContent = confirmKind === 'smoothie' ? 'Finished it' : confirmKind === 'avocado' ? 'Yes, I ate it' : kind === 'done' ? 'Yes, done' : 'Yes, skip';
-    $('confirmFridge').textContent = confirmKind === 'avocado' ? 'No' : 'In the fridge';
-    $('confirmFridge').classList.toggle('hidden', confirmKind !== 'smoothie' && confirmKind !== 'avocado');
-    $('confirmNo').textContent = confirmKind === 'smoothie' || confirmKind === 'avocado' ? 'Cancel' : 'No';
+    $('confirmText').textContent = confirmKind === 'reply' ? `Did ${replyWho()} reply?` : confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : confirmKind === 'avocado' ? 'Did you eat the avocado?' : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
+    $('confirmYes').textContent = confirmKind === 'reply' ? 'Yes, they replied' : confirmKind === 'smoothie' ? 'Finished it' : confirmKind === 'avocado' ? 'Yes, I ate it' : kind === 'done' ? 'Yes, done' : 'Yes, skip';
+    $('confirmFridge').textContent = confirmKind === 'avocado' ? 'No' : confirmKind === 'reply' ? 'No reply yet' : 'In the fridge';
+    $('confirmFridge').classList.toggle('hidden', confirmKind !== 'smoothie' && confirmKind !== 'avocado' && confirmKind !== 'reply');
+    $('confirmNo').textContent = confirmKind === 'smoothie' || confirmKind === 'avocado' || confirmKind === 'reply' ? 'Cancel' : 'No';
     $('stepActions').classList.add('hidden');
     $('confirmBox').classList.remove('hidden');
   }
@@ -1803,8 +1806,8 @@
       status(t); if ($('autospeak').checked) speak(t);
       return;
     }
-    if (confirmKind !== 'smoothie') return closeConfirm();
-    pendingLines = ['smoothie: fridge'];
+    if (confirmKind !== 'smoothie' && confirmKind !== 'reply') return closeConfirm();
+    pendingLines = confirmKind === 'reply' ? [`no reply: ${next.tasks.join(', ')}`] : ['smoothie: fridge'];
     lastHandled = { closesCurrent: true };
     closeConfirm();
     $('stepActions').classList.add('hidden');
@@ -1812,7 +1815,7 @@
     lastHandled = null;
   };
   $('confirmYes').onclick = async () => {
-    const kind = confirmKind === 'smoothie' || confirmKind === 'avocado' ? 'done' : confirmKind;
+    const kind = confirmKind === 'smoothie' || confirmKind === 'avocado' ? 'done' : confirmKind === 'reply' ? 'replied' : confirmKind;
     if (!kind || !next?.tasks?.length) return closeConfirm();
     pendingLines = [`${kind}: ${next.tasks.join(', ')}`];
     lastHandled = { closesCurrent: true };
@@ -1885,6 +1888,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261024a"></script>
+<script src="music.js?v=20261024b"></script>
 </body>
 </html>

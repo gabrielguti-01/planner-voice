@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261027b"></script>
-<script src="test/sandbox.js?v=20261027b"></script>
+<script src="test/seed.js?v=20261027c"></script>
+<script src="test/sandbox.js?v=20261027c"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -218,6 +218,8 @@
   #plan .why { display:block; margin-top:2px; font:400 12px/1.35 var(--mono); color:var(--dim); }
   .smoothie-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:14px; }
   .smoothie-line button { flex:0 0 auto; padding:9px 12px; }
+  .anchor-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; font-size:14px; }
+  .anchor-head button { flex:0 0 auto; padding:9px 12px; }
   .workout h3 { margin:14px 0 6px; font-size:15px; letter-spacing:.02em; color:var(--p); }
   .workout h3:first-child { margin-top:0; }
   .workout .ex { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid rgba(var(--p-rgb),.16); }
@@ -643,6 +645,7 @@
     <div class="smoothie-line hidden" id="smoothieLine"><span id="smoothieText"></span><button id="smoothieAlert" class="mu-small">Phone alert</button></div>
     <div class="row step-actions hidden" id="stepActions">
       <button id="doneBtn" class="primary">Done</button>
+      <button id="oneByOne" class="hidden">One by one</button>
       <button id="skipBtn">Skip</button>
     </div>
     <div class="meta musts hidden" id="mustsLine"></div>
@@ -692,7 +695,10 @@
   <details class="card hidden" id="projectsBox"><summary>Projects</summary><div id="projects" class="notes-panel"></div></details>
   <details class="card hidden" id="libraryBox"><summary>Library</summary><div id="library" class="notes-panel"></div></details>
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
-  <details class="card hidden" id="anchorsBox"><summary id="anchorsSum">Daily anchors</summary><ul id="anchors"></ul></details>
+  <details class="card hidden" id="anchorsBox"><summary id="anchorsSum">Daily anchors</summary>
+    <div class="anchor-head"><b id="anchorsHeadA"></b><button id="anchorsAllA" class="mu-small">All done</button></div><ul id="anchorsA"></ul>
+    <div class="anchor-head" id="anchorsHeadBRow"><b id="anchorsHeadB"></b><button id="anchorsAllB" class="mu-small">All done</button></div><ul id="anchorsB"></ul>
+  </details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
   <details class="card hidden" id="groceryBox"><summary>Grocery and shopping list</summary><div id="groceries" class="shop"></div></details>
@@ -841,7 +847,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261027b"></script>
+<script src="speech.js?v=20261027c"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -870,6 +876,11 @@
     const akeep = (n.anchorIds || []).map((ids) => !allClosed(ids));
     Object.assign(base, { plan, planIds, planWhy, today: (n.today || []).filter((_, i) => tkeep[i] !== false), todayIds: (n.todayIds || []).filter((_, i) => tkeep[i] !== false),
       anchors: (n.anchors || []).filter((_, i) => akeep[i] !== false), anchorIds: (n.anchorIds || []).filter((_, i) => akeep[i] !== false), anchorWhy: (n.anchorWhy || []).filter((_, i) => akeep[i] !== false) });
+    base.anchorGroups = (n.anchorGroups || []).map((g) => ({ ...g, items: g.items.filter((x) => !allClosed(x.ids)) })).filter((g) => g.items.length);
+    if (/daily anchors/i.test(n.step || '') && !allClosed(n.tasks)) {
+      const left = (n.tasks || []).filter((id) => !isClosed(id)), fix = (s) => (s || '').replace(/\(\d+ left\)/, `(${left.length} left)`);
+      return Object.assign(base, { tasks: left, step: fix(n.step), say: fix(n.say) });
+    }
     if (!allClosed(n.tasks)) return base;
     let [up, ids] = pairs.shift() || ['', []];
     // the short queue ran out: the rest of today's plan is the queue (never "nothing queued" while there is a plan)
@@ -1171,6 +1182,9 @@
     smoothieClock();
     drawWorkout();
     const canMark = !!(next.tasks && next.tasks.length);
+    const anchorStep = /daily anchors/i.test(next.step || '');
+    $('doneBtn').textContent = anchorStep ? 'All done' : 'Done';
+    $('oneByOne').classList.toggle('hidden', !anchorStep);
     if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
     $('stepActions').classList.toggle('hidden', !canMark || !!confirmKind);
     drawMusts();
@@ -1191,16 +1205,13 @@
     // Today's plan: every step with its reason, and a check to mark it done right here
     // the daily anchors have their own list, so these two show the bigger picture (user, 2026-10-27)
     const aSet = new Set((next.anchorIds || []).flat()), isA = (ids) => !!(ids && ids.length) && ids.every((id) => aSet.has(id));
-    const pk = (next.plan || []).map((_, i) => !isA((next.planIds || [])[i]));
-    const bigPlan = (next.plan || []).filter((_, i) => pk[i]), bigIds = (next.planIds || []).filter((_, i) => pk[i]), bigWhy = (next.planWhy || []).filter((_, i) => pk[i]);
-    drawList('plan', [...bigPlan, ...(next.notToday || []).map((x) => 'Not today: ' + x)], bigIds, bigWhy);
-    $('planBox').classList.toggle('hidden', !bigPlan.length);
+    // Today's plan: the planner already shows each half of the anchors as one step
+    drawList('plan', [...(next.plan || []), ...(next.notToday || []).map((x) => 'Not today: ' + x)], next.planIds || [], next.planWhy || []);
+    $('planBox').classList.toggle('hidden', !(next.plan || []).length);
     const tk = next.today.map((_, i) => !isA((next.todayIds || [])[i]));
     const bigToday = next.today.filter((_, i) => tk[i]), bigTodayIds = (next.todayIds || []).filter((_, i) => tk[i]);
     drawList('today', bigToday.length ? bigToday : ['All done.'], bigToday.length ? bigTodayIds : [], []);
-    drawList('anchors', next.anchors || [], next.anchorIds || [], next.anchorWhy || []);
-    $('anchorsSum').textContent = `Daily anchors (${(next.anchors || []).length} left)`;
-    $('anchorsBox').classList.toggle('hidden', !(next.anchors || []).length);
+    drawAnchors();
     fill('week', next.week, 'Nothing dated.');
     fill('attention', next.attention, '');
     $('attentionCard').classList.toggle('hidden', !next.attention.length);
@@ -1228,6 +1239,20 @@
       }
       ul.appendChild(li);
     });
+  }
+  // the Daily anchors list: PM and AM apart (the one on top first), each ticked off one by one or all at once
+  function drawAnchors() {
+    const gs = next.anchorGroups || [];
+    for (const [slot, g] of [['A', gs[0]], ['B', gs[1]]]) {
+      $('anchorsHead' + slot).textContent = g ? `${g.name} (${g.items.length})` : '';
+      $('anchorsAll' + slot).classList.toggle('hidden', !g);
+      $('anchorsAll' + slot).onclick = g ? () => checkOff(g.items.flatMap((x) => x.ids), `all ${g.name} daily anchors`) : null;
+      drawList('anchors' + slot, g ? g.items.map((x) => x.text) : [], g ? g.items.map((x) => x.ids) : [], []);
+    }
+    $('anchorsHeadBRow').classList.toggle('hidden', !gs[1]);
+    const n = gs.reduce((s, g) => s + g.items.length, 0);
+    $('anchorsSum').textContent = `Daily anchors (${n} left)`;
+    $('anchorsBox').classList.toggle('hidden', !n);
   }
   let toastTimer = 0;
   function checkOff(ids, name) {
@@ -1793,9 +1818,10 @@
   const replyWho = () => ((next?.step || '').match(/^Check if (.+?) replied/) || [])[1] || 'they';
   function askStep(kind) {
     if (!next?.tasks?.length) { status('There is no step to mark right now.', 'warn'); return; }
-    confirmKind = kind === 'done' && smoothieAsk() ? 'smoothie' : kind === 'done' && avocadoAsk() ? 'avocado' : kind === 'done' && replyAsk() ? 'reply' : kind;
+    const anchorStep = /daily anchors/i.test(next.step || '');
+    confirmKind = anchorStep ? kind : kind === 'done' && smoothieAsk() ? 'smoothie' : kind === 'done' && avocadoAsk() ? 'avocado' : kind === 'done' && replyAsk() ? 'reply' : kind;
     const name = next.step || (next.say || '').replace(/^(?:Saved\. )?Next: /, '').replace(/[.]\s.*$/, '');
-    $('confirmText').textContent = confirmKind === 'reply' ? `Did ${replyWho()} reply?` : confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : confirmKind === 'avocado' ? 'Did you eat the avocado?' : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
+    $('confirmText').textContent = confirmKind === 'reply' ? `Did ${replyWho()} reply?` : confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : confirmKind === 'avocado' ? 'Did you eat the avocado?' : anchorStep ? (kind === 'done' ? `Check off all ${next.tasks.length} of them?` : `Skip all ${next.tasks.length} of them for today?`) : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
     $('confirmYes').textContent = confirmKind === 'reply' ? 'Yes, they replied' : confirmKind === 'smoothie' ? 'Finished it' : confirmKind === 'avocado' ? 'Yes, I ate it' : kind === 'done' ? 'Yes, done' : 'Yes, skip';
     $('confirmFridge').textContent = confirmKind === 'avocado' ? 'No' : confirmKind === 'reply' ? 'No reply yet' : 'In the fridge';
     $('confirmFridge').classList.toggle('hidden', confirmKind !== 'smoothie' && confirmKind !== 'avocado' && confirmKind !== 'reply');
@@ -1805,6 +1831,7 @@
   }
   $('doneBtn').onclick = () => askStep('done');
   $('skipBtn').onclick = () => askStep('skip');
+  $('oneByOne').onclick = () => { drawer(true); $('anchorsBox').open = true; $('anchorsBox').scrollIntoView?.({ behavior: 'smooth' }); };
   $('confirmNo').onclick = closeConfirm;
   $('confirmFridge').onclick = async () => {
     if (confirmKind === 'avocado') { // not eaten: it goes into the smoothie, and lunch is still checked off
@@ -1900,6 +1927,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261027b"></script>
+<script src="music.js?v=20261027c"></script>
 </body>
 </html>

@@ -456,6 +456,11 @@
       // the daily anchors, in their own list (user, 2026-10-27)
       anchors: section('Daily anchors').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2).replace(/\s*\(([A-Z0-9][A-Z0-9@#., -]*)\) at (.*)$/, ' at $2 ($1)'))),
       anchorIds: section('Daily anchors').split('\n').filter((l) => l.startsWith('- ')).map((l) => ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)(?: at [^()]*)?\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter((x) => x && x !== '-')),
+      // the anchors by half of the day, in the order shown (### PM / ### AM)
+      anchorGroups: section('Daily anchors').split(/\n(?=### )/).filter((b) => /^### /.test(b)).map((b) => ({
+        name: b.match(/^### (.*)$/m)[1].trim(),
+        items: b.split('\n').filter((l) => l.startsWith('- ')).map((l) => ({ text: clean(l.slice(2).replace(/\s*\(([A-Z0-9][A-Z0-9@#., -]*)\) at (.*)$/, ' at $2 ($1)')), ids: ((l.match(/\(([A-Z0-9][A-Z0-9@#., -]*)\)(?: at [^()]*)?\s*$/) || [])[1] || '').split(',').map((x) => x.trim()).filter(Boolean) })),
+      })),
       anchorWhy: section('Daily anchors').split('\n').reduce((acc, l) => { if (l.startsWith('- ')) acc.push(''); else if (/^\s+- why: /.test(l) && acc.length) acc[acc.length - 1] = l.replace(/^\s+- why: /, '').trim(); return acc; }, []),
       notToday: (section("Today's plan").split('**Not today:**')[1] || '').split('\n').filter((l) => l.startsWith('- ')).map((l) => clean(l.slice(2))),
       made: field('made'), smoothieBy: field('smoothie_by'), smoothieKept: field('smoothie_kept'), validUntil: field('valid_until'), tired: field('tired') === 'on', brainDead: field('brain_dead') === 'on', exam: field('exam') === 'on',

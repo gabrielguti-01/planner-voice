@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261027c"></script>
-<script src="test/sandbox.js?v=20261027c"></script>
+<script src="test/seed.js?v=20261027d"></script>
+<script src="test/sandbox.js?v=20261027d"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -695,7 +695,7 @@
   <details class="card hidden" id="projectsBox"><summary>Projects</summary><div id="projects" class="notes-panel"></div></details>
   <details class="card hidden" id="libraryBox"><summary>Library</summary><div id="library" class="notes-panel"></div></details>
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
-  <details class="card hidden" id="anchorsBox"><summary id="anchorsSum">Daily anchors</summary>
+  <details class="card hidden" id="anchorsBox"><summary id="anchorsSum">Morning routine &amp; daily anchors</summary>
     <div class="anchor-head"><b id="anchorsHeadA"></b><button id="anchorsAllA" class="mu-small">All done</button></div><ul id="anchorsA"></ul>
     <div class="anchor-head" id="anchorsHeadBRow"><b id="anchorsHeadB"></b><button id="anchorsAllB" class="mu-small">All done</button></div><ul id="anchorsB"></ul>
   </details>
@@ -847,7 +847,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261027c"></script>
+<script src="speech.js?v=20261027d"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -877,7 +877,7 @@
     Object.assign(base, { plan, planIds, planWhy, today: (n.today || []).filter((_, i) => tkeep[i] !== false), todayIds: (n.todayIds || []).filter((_, i) => tkeep[i] !== false),
       anchors: (n.anchors || []).filter((_, i) => akeep[i] !== false), anchorIds: (n.anchorIds || []).filter((_, i) => akeep[i] !== false), anchorWhy: (n.anchorWhy || []).filter((_, i) => akeep[i] !== false) });
     base.anchorGroups = (n.anchorGroups || []).map((g) => ({ ...g, items: g.items.filter((x) => !allClosed(x.ids)) })).filter((g) => g.items.length);
-    if (/daily anchors/i.test(n.step || '') && !allClosed(n.tasks)) {
+    if (/daily anchors|morning routine/i.test(n.step || '') && !allClosed(n.tasks)) {
       const left = (n.tasks || []).filter((id) => !isClosed(id)), fix = (s) => (s || '').replace(/\(\d+ left\)/, `(${left.length} left)`);
       return Object.assign(base, { tasks: left, step: fix(n.step), say: fix(n.say) });
     }
@@ -1182,7 +1182,7 @@
     smoothieClock();
     drawWorkout();
     const canMark = !!(next.tasks && next.tasks.length);
-    const anchorStep = /daily anchors/i.test(next.step || '');
+    const anchorStep = /daily anchors|morning routine/i.test(next.step || '');
     $('doneBtn').textContent = anchorStep ? 'All done' : 'Done';
     $('oneByOne').classList.toggle('hidden', !anchorStep);
     if (!canMark) { confirmKind = null; $('confirmBox').classList.add('hidden'); }
@@ -1240,18 +1240,18 @@
       ul.appendChild(li);
     });
   }
-  // the Daily anchors list: PM and AM apart (the one on top first), each ticked off one by one or all at once
+  // the Morning routine (AM) and the Daily anchors (PM) apart (the one on top first), each ticked off one by one or all at once
   function drawAnchors() {
     const gs = next.anchorGroups || [];
     for (const [slot, g] of [['A', gs[0]], ['B', gs[1]]]) {
       $('anchorsHead' + slot).textContent = g ? `${g.name} (${g.items.length})` : '';
       $('anchorsAll' + slot).classList.toggle('hidden', !g);
-      $('anchorsAll' + slot).onclick = g ? () => checkOff(g.items.flatMap((x) => x.ids), `all ${g.name} daily anchors`) : null;
+      $('anchorsAll' + slot).onclick = g ? () => checkOff(g.items.flatMap((x) => x.ids), `all of ${/^[A-Z]{2}$/.test(g.name) ? g.name + ' daily anchors' : g.name.toLowerCase()}`) : null;
       drawList('anchors' + slot, g ? g.items.map((x) => x.text) : [], g ? g.items.map((x) => x.ids) : [], []);
     }
     $('anchorsHeadBRow').classList.toggle('hidden', !gs[1]);
     const n = gs.reduce((s, g) => s + g.items.length, 0);
-    $('anchorsSum').textContent = `Daily anchors (${n} left)`;
+    $('anchorsSum').textContent = `Morning routine & daily anchors (${n} left)`;
     $('anchorsBox').classList.toggle('hidden', !n);
   }
   let toastTimer = 0;
@@ -1818,7 +1818,7 @@
   const replyWho = () => ((next?.step || '').match(/^Check if (.+?) replied/) || [])[1] || 'they';
   function askStep(kind) {
     if (!next?.tasks?.length) { status('There is no step to mark right now.', 'warn'); return; }
-    const anchorStep = /daily anchors/i.test(next.step || '');
+    const anchorStep = /daily anchors|morning routine/i.test(next.step || '');
     confirmKind = anchorStep ? kind : kind === 'done' && smoothieAsk() ? 'smoothie' : kind === 'done' && avocadoAsk() ? 'avocado' : kind === 'done' && replyAsk() ? 'reply' : kind;
     const name = next.step || (next.say || '').replace(/^(?:Saved\. )?Next: /, '').replace(/[.]\s.*$/, '');
     $('confirmText').textContent = confirmKind === 'reply' ? `Did ${replyWho()} reply?` : confirmKind === 'smoothie' ? 'Did you finish the smoothie, or put it in the fridge?' : confirmKind === 'avocado' ? 'Did you eat the avocado?' : anchorStep ? (kind === 'done' ? `Check off all ${next.tasks.length} of them?` : `Skip all ${next.tasks.length} of them for today?`) : kind === 'done' ? `Mark “${name}” as done?` : `Skip “${name}” for today?`;
@@ -1927,6 +1927,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261027c"></script>
+<script src="music.js?v=20261027d"></script>
 </body>
 </html>

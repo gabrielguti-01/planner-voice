@@ -388,6 +388,8 @@
         continue;
       }
 
+      // a day for the projects only (user, 2026-10-27)
+      if ((/\btoday\b/.test(low) && /\b(?:just|only)\b[^.]{0,40}\bprojects?\b/.test(low)) || /\bprojects? day\b/.test(low)) { out.commands.push(/\bnot\b|\bno longer\b|\banymore\b|\boff\b/.test(low) ? 'projects day: off' : 'projects day: on'); continue; }
       if (/\bbrain[ -]?dead\b|\bcan'?t think\b|\bbrain is (?:fried|mush|dead)\b/.test(low)) { out.commands.push(/\bnot\b|\bno longer\b|\banymore\b|\boff\b/.test(low) ? 'braindead: off' : 'braindead: on'); continue; }
       if (/\b(?:i'?m|i am|feeling)\b.*\b(?:tired|wiped|exhausted|drained|worn out)\b/.test(low) && !/\bnot\b/.test(low)) { out.commands.push('tired: on'); continue; }
       if (/^(?:i'?m|i am) (?:fine|ok|okay|good|better)(?: now)?$|\bnot tired\b/.test(low)) { out.commands.push('tired: off'); continue; }

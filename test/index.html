@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261024b"></script>
-<script src="test/sandbox.js?v=20261024b"></script>
+<script src="test/seed.js?v=20261027a"></script>
+<script src="test/sandbox.js?v=20261027a"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -692,6 +692,7 @@
   <details class="card hidden" id="projectsBox"><summary>Projects</summary><div id="projects" class="notes-panel"></div></details>
   <details class="card hidden" id="libraryBox"><summary>Library</summary><div id="library" class="notes-panel"></div></details>
   <details class="card hidden" id="planBox"><summary>Today's plan</summary><ul id="plan"></ul></details>
+  <details class="card hidden" id="anchorsBox"><summary id="anchorsSum">Daily anchors</summary><ul id="anchors"></ul></details>
   <details class="card" id="todayBox"><summary>Still open today</summary><ul id="today"></ul></details>
   <details class="card hidden" id="lateBox"><summary>Late or waiting</summary><ul id="late"></ul></details>
   <details class="card hidden" id="groceryBox"><summary>Grocery and shopping list</summary><div id="groceries" class="shop"></div></details>
@@ -840,7 +841,7 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261024b"></script>
+<script src="speech.js?v=20261027a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -866,7 +867,9 @@
     const keep = (n.planIds || []).map((ids) => !allClosed(ids));
     const plan = (n.plan || []).filter((_, i) => keep[i] !== false), planIds = (n.planIds || []).filter((_, i) => keep[i]), planWhy = (n.planWhy || []).filter((_, i) => keep[i] !== false);
     const tkeep = (n.todayIds || []).map((ids) => !allClosed(ids));
-    Object.assign(base, { plan, planIds, planWhy, today: (n.today || []).filter((_, i) => tkeep[i] !== false), todayIds: (n.todayIds || []).filter((_, i) => tkeep[i] !== false) });
+    const akeep = (n.anchorIds || []).map((ids) => !allClosed(ids));
+    Object.assign(base, { plan, planIds, planWhy, today: (n.today || []).filter((_, i) => tkeep[i] !== false), todayIds: (n.todayIds || []).filter((_, i) => tkeep[i] !== false),
+      anchors: (n.anchors || []).filter((_, i) => akeep[i] !== false), anchorIds: (n.anchorIds || []).filter((_, i) => akeep[i] !== false), anchorWhy: (n.anchorWhy || []).filter((_, i) => akeep[i] !== false) });
     if (!allClosed(n.tasks)) return base;
     let [up, ids] = pairs.shift() || ['', []];
     // the short queue ran out: the rest of today's plan is the queue (never "nothing queued" while there is a plan)
@@ -1186,9 +1189,18 @@
     $('afterBox').open = false; // one thing at a time: the rest stays folded until asked for
     $('afterBox').classList.toggle('hidden', !$('showList').checked); // and the full order is hidden unless switched on
     // Today's plan: every step with its reason, and a check to mark it done right here
-    drawList('plan', [...(next.plan || []), ...(next.notToday || []).map((x) => 'Not today: ' + x)], next.planIds || [], next.planWhy || []);
-    $('planBox').classList.toggle('hidden', !(next.plan || []).length);
-    drawList('today', next.today.length ? next.today : ['All done.'], next.today.length ? next.todayIds || [] : [], []);
+    // the daily anchors have their own list, so these two show the bigger picture (user, 2026-10-27)
+    const aSet = new Set((next.anchorIds || []).flat()), isA = (ids) => !!(ids && ids.length) && ids.every((id) => aSet.has(id));
+    const pk = (next.plan || []).map((_, i) => !isA((next.planIds || [])[i]));
+    const bigPlan = (next.plan || []).filter((_, i) => pk[i]), bigIds = (next.planIds || []).filter((_, i) => pk[i]), bigWhy = (next.planWhy || []).filter((_, i) => pk[i]);
+    drawList('plan', [...bigPlan, ...(next.notToday || []).map((x) => 'Not today: ' + x)], bigIds, bigWhy);
+    $('planBox').classList.toggle('hidden', !bigPlan.length);
+    const tk = next.today.map((_, i) => !isA((next.todayIds || [])[i]));
+    const bigToday = next.today.filter((_, i) => tk[i]), bigTodayIds = (next.todayIds || []).filter((_, i) => tk[i]);
+    drawList('today', bigToday.length ? bigToday : ['All done.'], bigToday.length ? bigTodayIds : [], []);
+    drawList('anchors', next.anchors || [], next.anchorIds || [], next.anchorWhy || []);
+    $('anchorsSum').textContent = `Daily anchors (${(next.anchors || []).length} left)`;
+    $('anchorsBox').classList.toggle('hidden', !(next.anchors || []).length);
     fill('week', next.week, 'Nothing dated.');
     fill('attention', next.attention, '');
     $('attentionCard').classList.toggle('hidden', !next.attention.length);
@@ -1888,6 +1900,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261024b"></script>
+<script src="music.js?v=20261027a"></script>
 </body>
 </html>

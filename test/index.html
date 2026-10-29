@@ -2,8 +2,8 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <base href="../">
-<script src="test/seed.js?v=20261027e"></script>
-<script src="test/sandbox.js?v=20261027e"></script>
+<script src="test/seed.js?v=20261029a"></script>
+<script src="test/sandbox.js?v=20261029a"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
@@ -847,10 +847,20 @@
  </div>
 </section>
 
-<script src="speech.js?v=20261027e"></script>
+<script src="speech.js?v=20261029a"></script>
 <script>
 (() => {
   const $ = (id) => document.getElementById(id);
+  // The planner runs on New York time (user, 2026-10-29: "I do work in EST and my computer is set to PST"). Every clock
+  // here is New York wall time, whatever the device's own time zone: nyNow() is that wall time read as a local time, so
+  // it compares straight with the engine's "YYYY-MM-DD HH:MM" times and shows the right hour on the clock.
+  const NY_FMT = (() => { try { return new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); } catch (e) { return null; } })();
+  function nyNow() {
+    const d = new Date();
+    if (!NY_FMT || !NY_FMT.formatToParts) return d.getTime();
+    const q = {}; for (const x of NY_FMT.formatToParts(d)) q[x.type] = +x.value;
+    return new Date(q.year, q.month - 1, q.day, q.hour % 24, q.minute, q.second, d.getMilliseconds()).getTime();
+  }
   const { toCommands, parseNext } = PlannerSpeech;
   const MOCK = new URLSearchParams(location.search).has('mock');
   // Voice in and out are set aside (user, 2026-10-19: "I don't like the voice"). The code stays as a block for later:
@@ -862,7 +872,7 @@
   // steps closed here that the planner may not have applied yet: id → when (kept 10 minutes)
   const closedIds = new Map(); let sendSeq = 0;
   const CLOSED_MS = 10 * 60e3;
-  const isClosed = (id) => { const t = closedIds.get(id); if (t && Date.now() - t > CLOSED_MS) closedIds.delete(id); return closedIds.has(id); };
+  const isClosed = (id) => { const t = closedIds.get(id); if (t && nyNow() - t > CLOSED_MS) closedIds.delete(id); return closedIds.has(id); };
   const allClosed = (ids) => !!(ids && ids.length) && ids.every(isClosed);
   // a plan with the steps already closed here taken out: the first open one becomes the step on screen
   function mask(n) {
@@ -893,7 +903,7 @@
   const stale = () => false; // replaced by mask(): an older plan is shown without the steps already closed here
   const MODES = { idle: 'ONLINE', listening: 'LISTENING', speaking: 'SPEAKING', saving: 'SYNCING' };
   const setState = (s) => { if (document.body) document.body.dataset.state = s; $('mode').textContent = MODES[s]; window.PlannerMusic?.onState(s); };
-  const tickClock = () => { const d = new Date(); $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  const tickClock = () => { const d = new Date(nyNow()); $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
   tickClock(); setInterval(tickClock, 15000);
 
   // ---------- everything except the next step lives in a drawer ----------
@@ -912,21 +922,21 @@
   const p2 = (n) => String(n).padStart(2, '0');
   const HOUR = 3600e3;
   const DAY_FROM = 6 * HOUR;
-  const dayBase = () => { const d = new Date(Date.now() - DAY_FROM); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const dayBase = () => { const d = new Date(nyNow() - DAY_FROM); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
   const clockText = (ms) => { const d = new Date(ms), h = d.getHours(), m = d.getMinutes(); return (((h + 11) % 12) + 1) + (m ? ':' + p2(m) : '') + (h < 12 ? ' AM' : ' PM'); };
   function checkIn(force) {
     const base = dayBase(), saved = store.get('checkin').split('|');
     const kept = +saved[0] === base && +saved[1] ? +saved[1] : 0;
-    const night = Date.now() >= base + 24 * HOUR; // midnight to 6 AM: still the day before
+    const night = nyNow() >= base + 24 * HOUR; // midnight to 6 AM: still the day before
     if (night) return kept || base + DAY_FROM;
     if (kept && !force) return kept;
-    const start = Math.max(base + DAY_FROM, base + Math.floor((Date.now() - base) / (30 * 60e3)) * 30 * 60e3);
+    const start = Math.max(base + DAY_FROM, base + Math.floor((nyNow() - base) / (30 * 60e3)) * 30 * 60e3);
     store.set('checkin', base + '|' + start);
     return start;
   }
   const css = (el) => el.style || (el.style = {});
   function drawDay() {
-    const base = dayBase(), nowMs = Date.now(), start = checkIn(false);
+    const base = dayBase(), nowMs = nyNow(), start = checkIn(false);
     const parse = (t) => (/^\d{4}-/.test(t || '') ? new Date(t.replace(' ', 'T')).getTime() : 0);
     let bed = MOCK ? 0 : parse(next?.day?.bed), wind = MOCK ? 0 : parse(next?.day?.windDown);
     if (!bed || bed <= start || bed > base + 30 * HOUR) { bed = base + 24 * HOUR; wind = bed - 2 * HOUR; }
@@ -956,7 +966,7 @@
     $('dlMid').textContent = zone === 'late' ? 'Past bedtime' : zone === 'winddown' ? 'Winding down' : upcoming || ((next?.day?.events || []).length ? 'Nothing else fixed today' : 'Free day');
   }
   $('checkin').onclick = () => {
-    const night = Date.now() >= dayBase() + 24 * HOUR;
+    const night = nyNow() >= dayBase() + 24 * HOUR;
     checkIn(true); drawDay(); drawer(false);
     status(night ? 'The day line starts fresh at your first check-in after 6 AM.' : 'Checked in. Your day line starts now.');
   };
@@ -1115,7 +1125,7 @@
     $('settings').open = false; drawer(false); refresh();
   };
   const status = (t, cls = '') => { $('status').textContent = t; $('status').className = 'meta ' + cls; };
-  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const today = () => { const d = new Date(nyNow()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
   // ---------- GitHub ----------
   const api = (path, opts = {}) => fetch(`https://api.github.com/repos/${store.get('repo', $('repo').value)}/contents/${path}`, {
@@ -1193,7 +1203,7 @@
     drawGoals();
     drawProjects();
     drawDay();
-    const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date();
+    const stale = next.validUntil && new Date(next.validUntil.replace(' ', 'T')) < new Date(nyNow());
     const fu = next.pressure.freeUntil, lvl = next.pressure.level;
     $('gauge').dataset.level = lvl || '';
     $('gauge').textContent = ''; // no "free until" clock on the screen: it adds stress (user, 2026-10-18)
@@ -1257,7 +1267,7 @@
   let toastTimer = 0;
   function checkOff(ids, name) {
     const wasCurrent = ids.every((id) => (next?.tasks || []).includes(id)) && (next?.tasks || []).every((id) => ids.includes(id));
-    for (const id of ids) closedIds.set(id, Date.now());
+    for (const id of ids) closedIds.set(id, nyNow());
     next = mask(next);
     render();
     if (wasCurrent && $('autospeak').checked) speak(next.say);
@@ -1410,13 +1420,13 @@
     const made = n?.made ? new Date(n.made.replace(' ', 'T')).getTime() : NaN;
     if (!(made > 0)) return false;
     const day = (t) => new Date(t - 4 * 3600e3).toDateString();
-    return day(made) !== day(Date.now()) || Date.now() - made > 90 * 60e3;
+    return day(made) !== day(nyNow()) || nyNow() - made > 90 * 60e3;
   }
   let catching = false;
   async function catchUp() {
     if (MOCK || catching || !outdated(next) || pendingLines.length) return;
-    if (Date.now() - +store.get('catchUpAt', '0') < 15 * 60e3) return;
-    store.set('catchUpAt', String(Date.now()));
+    if (nyNow() - +store.get('catchUpAt', '0') < 15 * 60e3) return;
+    store.set('catchUpAt', String(nyNow()));
     catching = true;
     const made = next.made;
     try {
@@ -1483,7 +1493,7 @@
     $('pending').dataset.action = r.action || '';
     if ($('autosend').checked && !r.uncertain) send();
   }
-  const localNow = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+  const localNow = () => { const d = new Date(nyNow()), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
   // Recheck: asks the engine to recompute now. It records nothing and does not move the scheduled recheck.
   async function recheck() {
     drawer(false);
@@ -1537,7 +1547,7 @@
       let shownNow = null;
       const seq = ++sendSeq;
       if (closes && next) {
-        for (const id of next.tasks || []) closedIds.set(id, Date.now());
+        for (const id of next.tasks || []) closedIds.set(id, nyNow());
         next = mask(next);
         shownNow = next.say;
         render();
@@ -1776,7 +1786,7 @@
     $('smoothieLine').classList.toggle('hidden', !(by > 0));
     clearTimeout(smoothieTimer);
     if (!(by > 0)) return;
-    const left = by - Date.now();
+    const left = by - nyNow();
     const cold = next.smoothieKept === 'fridge';
     $('smoothieText').textContent = cold ? 'Smoothie in the fridge: finish it before bed' : left > 0 ? `Smoothie: good until ${clockText(by)}` : 'Smoothie: past its safe time';
     const warnAt = by - (cold ? 120 : 20) * 60000, key = 'smoothieWarned:' + next.smoothieBy + (cold ? ':fridge' : '');
@@ -1784,15 +1794,15 @@
       store.set(key, '1');
       const t = cold ? 'Your smoothie is in the fridge: finish it before bed.' : `Finish your smoothie: it's good until ${clockText(by)}, or put it in the fridge.`;
       status(t, 'warn'); if ($('autospeak').checked) speak(t);
-    }, Math.max(0, warnAt - Date.now()));
+    }, Math.max(0, warnAt - nyNow()));
   }
   // a calendar event with an alarm: the phone itself reminds you, even with this app closed
   $('smoothieAlert').onclick = () => {
     const by = atLocal(next?.smoothieBy); if (!(by > 0)) return;
     const p = (n) => String(n).padStart(2, '0');
     const ics = (ms) => { const d = new Date(ms); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`; };
-    const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//To-Do//Smoothie//EN', 'BEGIN:VEVENT', `UID:smoothie-${by}@todo`, `DTSTAMP:${ics(Date.now())}`,
-      `DTSTART:${ics(by - (next.smoothieKept === 'fridge' ? 120 : 20) * 60000)}`, 'DURATION:PT20M', next.smoothieKept === 'fridge' ? 'SUMMARY:Finish your smoothie from the fridge' : `SUMMARY:Finish your smoothie (good until ${clockText(by)})`,
+    const body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//To-Do//Smoothie//EN', 'BEGIN:VEVENT', `UID:smoothie-${by}@todo`, `DTSTAMP:${ics(nyNow())}`,
+      `DTSTART;TZID=America/New_York:${ics(by - (next.smoothieKept === 'fridge' ? 120 : 20) * 60000)}`, 'DURATION:PT20M', next.smoothieKept === 'fridge' ? 'SUMMARY:Finish your smoothie from the fridge' : `SUMMARY:Finish your smoothie (good until ${clockText(by)})`,
       'BEGIN:VALARM', 'TRIGGER:PT0M', 'ACTION:DISPLAY', 'DESCRIPTION:Finish your smoothie, or put it in the fridge', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([body], { type: 'text/calendar' })); a.download = 'smoothie-reminder.ics';
@@ -1927,6 +1937,6 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
 })();
 </script>
-<script src="music.js?v=20261027e"></script>
+<script src="music.js?v=20261029a"></script>
 </body>
 </html>

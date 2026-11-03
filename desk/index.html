@@ -172,7 +172,7 @@
 
           <div>
             <div class="tell">
-              <input id="tell" type="text" placeholder="Tell the planner: “fed Baby Man”, “move laundry to Friday”…" aria-label="Tell the planner">
+              <input id="tell" type="text" autocomplete="off" name="planner-tell" placeholder="Tell the planner: “fed Baby Man”, “move laundry to Friday”…" aria-label="Tell the planner">
               <button class="btn" id="tellGo">Send</button>
             </div>
             <div class="confirm hidden" id="tellBox">
@@ -303,7 +303,7 @@
     const p = todayProject();
     $('projPanel').classList.toggle('hidden', !p);
     if (p) drawProject(p, $('projSteps'), true);
-    $('thenLine').textContent = next.after?.length ? `Then: ${plain(next.after[0])}` : '';
+    $('thenLine').textContent = next.after?.length ? `Then: ${stepParts(next.after[0]).title}` : '';
     // the other views
     drawToday(); drawAllProjects(); drawWorkout(); drawSimple('shopList', (next.groceries || []).filter((x) => !/^_/.test(x)), 'The shopping list is empty.'); drawSimple('weekList', next.week, 'Nothing dated.'); drawGoals();
     $('cToday').textContent = (next.plan || []).filter((x) => !/^project day/.test(x)).length || '';

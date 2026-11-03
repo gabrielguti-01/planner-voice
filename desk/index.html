@@ -17,6 +17,7 @@
     --bg:#1a1e21; --side:#14181a; --card:#1d2b26; --panel:#20262a; --line:#2f373c; --row:#2a3135; --btn-line:#46525a;
     --ink:#ece6dc; --dim:#a3acb1; --brass:#e0a050; --brass-hi:#f2c27a; --hair:#6b5232; --jade:#e07a3f;
     --coral:#d4553a; --coral-bg:#341c17; --on-coral:#1e0c08; --active:#24352e;
+    --moss:#7fa38a; --rain:#8aa1b1; --lock:#6b757b;
     --serif:'EB Garamond',Georgia,serif; --sans:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
   }
   * { box-sizing: border-box; }
@@ -100,6 +101,49 @@
   td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--row); }
   th { color: var(--dim); font-weight: 500; font-size: 13px; }
   .pad { padding: 18px 26px; }
+  /* project page: the unlock flow and the connections graph */
+  .col.wide { max-width: 1280px; }
+  .ptop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .seg { display: inline-flex; border: 1px solid var(--btn-line); border-radius: 999px; padding: 3px; }
+  .seg button { border: none; background: none; padding: 7px 18px; border-radius: 999px; color: var(--dim); }
+  .seg button.on { background: var(--active); color: var(--brass-hi); box-shadow: inset 0 0 0 1px var(--hair); }
+  .pgrid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; align-items: start; }
+  @media (max-width: 1100px) { .pgrid { grid-template-columns: 1fr; } }
+  .flowwrap { overflow: auto; padding: 18px 22px 24px; }
+  .flow { position: relative; }
+  .flow svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .colhead { position: absolute; top: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .fnode { position: absolute; width: 240px; height: 92px; border-radius: 12px; border: 1px solid var(--line); background: var(--side); padding: 10px 12px; text-align: left; display: flex; flex-direction: column; gap: 4px; }
+  .fnode .ft { font-size: 14px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .fnode .fs { font-size: 12px; color: var(--dim); margin-top: auto; display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fnode.ready { border-color: var(--brass); background: #232a29; box-shadow: 0 0 0 1px rgba(224,160,80,.22), 0 0 24px rgba(224,160,80,.14); }
+  .fnode.ready .fs { color: var(--brass-hi); }
+  .fnode.done { border-color: #3f5a49; background: #1a231f; }
+  .fnode.done .ft { color: var(--dim); }
+  .fnode.done .fs { color: var(--moss); }
+  .fnode.locked { opacity: .6; border-style: dashed; }
+  .fnode.sel { outline: 2px solid var(--brass-hi); outline-offset: 3px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid #3f5a49; border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--dim); background: none; }
+  .plist li .t button { background: none; border: none; padding: 0; text-align: left; }
+  .plist li .t button:hover { color: var(--brass-hi); }
+  #graphSvg { width: 100%; height: 620px; display: block; cursor: grab; touch-action: none; user-select: none; }
+  #graphSvg.dragging { cursor: grabbing; }
+  #graphSvg .gn { cursor: pointer; transition: opacity .15s; }
+  #graphSvg .ge { transition: opacity .15s; }
+  #graphSvg .fade { opacity: .14; }
+  .gl { font: 11px var(--sans); fill: var(--dim); pointer-events: none; }
+  .gl.big { font: 600 14px var(--serif); fill: var(--ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .dpanel { padding: 20px 22px; position: sticky; top: 16px; }
+  .dpanel h3 { font: 500 24px/1.2 var(--serif); margin: 8px 0 10px; }
+  .dpanel .meta { font-size: 13px; color: var(--dim); margin: 0 0 12px; }
+  .dpanel .sub { padding-top: 14px; }
+  .dpanel .lk { display: block; background: none; border: none; padding: 4px 0; text-align: left; color: var(--ink); }
+  .dpanel .lk:hover { color: var(--brass-hi); }
+  .badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; }
+  .notebody { white-space: pre-wrap; font-size: 13px; color: var(--dim); max-height: 340px; overflow: auto; border-top: 1px solid var(--row); margin-top: 10px; padding-top: 10px; }
   @media (max-width: 760px) { nav.side { display: none; } main { padding: 24px 16px 48px; } h1.step { font-size: 30px; } .card { padding: 22px; } }
 </style>
 </head>
@@ -130,7 +174,7 @@
   </nav>
 
   <main>
-    <div class="col">
+    <div class="col" id="mainCol">
       <div class="status" id="status" role="status"></div>
 
       <!-- Home: one next action, then today's project -->
@@ -156,14 +200,14 @@
           </section>
 
           <section class="panel hidden" id="projPanel" aria-label="Today's project">
-            <button class="proj-head" id="projHead" aria-expanded="false">
+            <button class="proj-head" id="projHead">
               <div style="flex:1 1 auto;min-width:0">
                 <div class="kicker k">Today's project</div>
                 <div class="name" id="projName"></div>
                 <div class="dim" id="projSummary"></div>
               </div>
-              <span style="color:var(--brass);font-weight:600;white-space:nowrap" id="projLabel">See the steps</span>
-              <svg class="chev" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              <span style="color:var(--brass);font-weight:600;white-space:nowrap">Open the project</span>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
             </button>
             <div class="steps hidden" id="projSteps"></div>
           </section>
@@ -187,6 +231,27 @@
       <section id="v-today" class="view-sec hidden"><h2 class="view">Today's plan</h2><div class="panel" style="margin-top:18px"><div class="pad"><ol class="list" id="todayList"></ol></div></div>
         <h2 class="view" style="margin-top:28px;font-size:24px">Daily anchors and other open items</h2><div class="panel" style="margin-top:14px"><div class="pad"><ul class="list" id="openList"></ul></div></div></section>
       <section id="v-projects" class="view-sec hidden"><h2 class="view">Projects</h2><div id="allProjects" style="display:flex;flex-direction:column;gap:14px;margin-top:18px"></div></section>
+      <section id="v-project" class="view-sec hidden">
+        <div class="ptop">
+          <button class="linkbtn" id="projBack">← Back</button>
+          <div class="seg" role="group" aria-label="How to show the project"><button data-pv="flow" class="on">Flow</button><button data-pv="graph">Graph</button></div>
+        </div>
+        <div style="margin:14px 0 18px">
+          <div class="kicker k" id="pKicker">Project</div>
+          <h2 class="view" id="pName" style="font-size:40px;margin-top:6px"></h2>
+          <div class="dim" id="pSummary"></div>
+        </div>
+        <div class="pgrid">
+          <div style="min-width:0;display:flex;flex-direction:column;gap:18px">
+            <div id="pFlow" style="display:flex;flex-direction:column;gap:18px"></div>
+            <div id="pGraph" class="panel hidden">
+              <svg id="graphSvg" role="img" aria-label="Everything connected to this project"></svg>
+              <div class="legend"><span><i style="background:var(--jade)"></i>Project</span><span><i style="background:var(--brass-hi)"></i>Goal</span><span><i style="background:var(--brass)"></i>Ready now</span><span><i style="border:1.5px solid var(--lock)"></i>Locked</span><span><i style="background:var(--moss)"></i>Done</span><span><i style="background:var(--rain);border-radius:2px"></i>Note</span><span>Arrow: finish this to unlock that · drag dots to move them</span></div>
+            </div>
+          </div>
+          <aside class="panel dpanel" id="pDetail" aria-live="polite"></aside>
+        </div>
+      </section>
       <section id="v-workout" class="view-sec hidden"><h2 class="view" id="workoutTitle">Workout</h2><div class="panel" style="margin-top:18px"><div class="pad" id="workoutBody"></div></div></section>
       <section id="v-shopping" class="view-sec hidden"><h2 class="view">Shopping</h2><div class="panel" style="margin-top:18px"><div class="pad"><ul class="list" id="shopList"></ul></div></div><p class="dim">Check items off in the phone view while you shop.</p></section>
       <section id="v-week" class="view-sec hidden"><h2 class="view">Coming up</h2><div class="panel" style="margin-top:18px"><div class="pad"><ul class="list" id="weekList"></ul></div></div></section>
@@ -368,14 +433,14 @@
     const box = $('allProjects'); box.innerHTML = '';
     const tp = todayProject();
     for (const p of next.projects) {
-      const d = document.createElement('details'); d.className = 'panel';
-      const s = document.createElement('summary'); s.className = 'pad'; s.style.cursor = 'pointer';
-      s.innerHTML = '<span style="font:24px var(--serif)"></span> <span class="dim"></span>';
-      s.children[0].textContent = p.name; s.children[1].textContent = ` · ${p.steps.length} open` + (tp === p ? ' · today' : '');
-      d.appendChild(s);
-      const inner = document.createElement('div'); inner.className = 'steps'; d.appendChild(inner);
-      drawProject(p, inner, false);
-      box.appendChild(d);
+      const d = document.createElement('section'); d.className = 'panel';
+      const s = document.createElement('button'); s.className = 'proj-head';
+      s.innerHTML = '<div style="flex:1 1 auto;min-width:0"><div class="kicker k"></div><div class="name"></div><div class="dim"></div></div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+      s.querySelector('.kicker').textContent = tp === p ? "Today's project" : 'Project';
+      s.querySelector('.name').textContent = p.name;
+      s.querySelector('.dim').textContent = `${p.steps.length} open` + (p.every ? ` · every ${p.every}` : '');
+      s.onclick = () => openProject(p.name);
+      d.appendChild(s); box.appendChild(d);
     }
   }
   function drawWorkout() {
@@ -444,14 +509,328 @@
     else if (k === 'smoothie') send(['smoothie: fridge'], 'smoothie in the fridge');
   };
 
-  // ---------- today's project opens its steps ----------
-  $('projHead').onclick = () => {
-    projOpen = !projOpen;
-    $('projSteps').classList.toggle('hidden', !projOpen);
-    $('projPanel').classList.toggle('open', projOpen);
-    $('projHead').setAttribute('aria-expanded', String(projOpen));
-    $('projLabel').textContent = projOpen ? 'Hide steps' : 'See the steps';
-  };
+  // ---------- today's project opens its own page ----------
+  $('projHead').onclick = () => { const p = todayProject(); if (p) openProject(p.name); };
+
+  // ---------- the project page: what unlocks what, and everything it's connected to ----------
+  // Read from the planner itself: open steps in state/now.md (their [after:: ID] links), finished
+  // steps in state/history, the goal in definitions/goals.md, notes in state/notes and state/library.
+  let curProject = store.get('deskProject'), pv = store.get('deskPV', 'flow'), sel = null, model = null, pd = null;
+  async function getFile(path) {
+    if (MOCK) { const r = await fetch('/' + path, { cache: 'no-store' }); return r.ok ? r.text() : ''; }
+    const r = await api(path);
+    if (r.status === 404) return '';
+    if (!r.ok) throw new Error(`GitHub answered ${r.status}.`);
+    return b64decode((await r.json()).content);
+  }
+  async function listDir(path) {
+    if (MOCK) return (globalThis.__MOCK_DIRS || {})[path] || [];
+    const r = await api(path); if (!r.ok) return [];
+    const j = await r.json(); return Array.isArray(j) ? j.filter((f) => f.type === 'file').map((f) => f.name) : [];
+  }
+  async function planData(force) {
+    if (pd && !force && Date.now() - pd.at < 120e3) return pd;
+    const [now, goals, histNames, notes, library] = await Promise.all([getFile('state/now.md'), getFile('definitions/goals.md'), listDir('state/history'), listDir('state/notes'), listDir('state/library')]);
+    const months = histNames.filter((n) => /^\d{4}-\d{2}\.md$/.test(n)).sort().slice(-4);
+    const hist = (await Promise.all(months.map((n) => getFile('state/history/' + n)))).join('\n');
+    const nl = (s) => s.replace(/\r\n/g, '\n');
+    pd = { at: Date.now(), now: nl(now), goals: nl(goals), hist: nl(hist), notes: notes.map((n) => 'state/notes/' + n), library: library.map((n) => 'state/library/' + n) };
+    return pd;
+  }
+  function parseTasks(md) {
+    const out = []; let section = '';
+    for (const line of md.split('\n')) {
+      const h = line.match(/^#{2,4} (.*)$/); if (h) { section = h[1].trim(); continue; }
+      const m = line.match(/^- \[([ x-])\] (.*)$/); if (!m) continue;
+      const f = {};
+      let text = m[2].replace(/\[([\w-]+):: ([^\]]*)\]/g, (_, k, v) => { f[k] = v.trim(); return ''; }).trim();
+      if (!f.id) continue;
+      let who = '';
+      const w = text.match(/\s+[—-]\s+((?:YOU|DEV|TEST)(?:\s*\+\s*(?:YOU|DEV|TEST))*)$/);
+      if (w) { who = w[1].replace(/\s+/g, ' '); text = text.slice(0, w.index); }
+      const closed = m[1] !== ' ' || /^(done|skipped|expired|cancelled)$/.test(f.status || '');
+      out.push({ id: f.id, text: plain(text), who, f, section, closed });
+    }
+    return out;
+  }
+  const WHO = { YOU: 'you', DEV: 'a coding agent', TEST: 'a real-device test' };
+  const whoWords = (w) => w ? w.split(' + ').map((x) => WHO[x] || x).join(' + ') : '';
+  const humanize = (id, key) => { const s = id.replace(new RegExp('^' + key + '-'), '').replace(/-S(\d+)$/, ' step $1').toLowerCase().replace(/-/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); };
+  function projectModel(name) {
+    const all = parseTasks(pd.now), allById = new Map(all.map((t) => [t.id, t]));
+    const counts = {};
+    for (const t of all) if (t.section.toLowerCase() === ('project: ' + name).toLowerCase() && t.f.project) counts[t.f.project] = (counts[t.f.project] || 0) + 1;
+    const key = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || name.toUpperCase().replace(/[^A-Z0-9]+/g, '-');
+    const hist = new Map();
+    for (const line of pd.hist.split('\n')) { const m = line.match(/^- (\d{4}-\d{2}-\d{2}) done ([A-Z0-9][\w-]*)(?: — (.*))?$/); if (m) hist.set(m[2], { date: m[1], note: m[3] || '' }); }
+    // planner order (from next.md): "#3 of 46", "matters 6/10"
+    const rank = new Map(), np = next.projects.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    for (const s of np ? np.steps : []) { const r = s.text.match(/#(\d+) of \d+/), mt = s.text.match(/matters (\d+)\/10/); for (const id of s.ids) rank.set(id, { n: r ? +r[1] : 999, matters: mt ? +mt[1] : null }); }
+    const byId = new Map(), steps = [];
+    const add = (s) => { byId.set(s.id, s); steps.push(s); return s; };
+    for (const t of all) if (t.f.project === key && !t.closed) add({ id: t.id, title: t.text, who: t.who, f: t.f, after: (t.f.after || '').split(/[,\s]+/).filter(Boolean), state: 'open', rank: rank.get(t.id)?.n ?? 999, matters: rank.get(t.id)?.matters ?? null });
+    const wanted = new Set(steps.flatMap((s) => s.after));
+    for (const [id, h] of hist) if (!byId.has(id) && (id.startsWith(key + '-') || wanted.has(id))) add({ id, title: humanize(id, key), note: h.note, date: h.date, after: [], state: 'done', f: {} });
+    for (const id of wanted) if (!byId.has(id)) {
+      const t = allById.get(id); // waits on a step from somewhere else in the planner
+      if (t && !t.closed) add({ id, title: t.text, who: t.who, f: t.f, after: [], state: 'open', outside: t.f.project || 'another list', rank: 999 });
+      else add({ id, title: t ? t.text : humanize(id, key), after: [], state: 'done', f: {}, note: 'finished earlier' });
+    }
+    const stillOpen = new Set(steps.filter((s) => s.state === 'open' && !isDoneLocally.has(s.id)).map((s) => s.id));
+    for (const s of steps) if (s.state === 'open') s.state = isDoneLocally.has(s.id) ? 'saved' : s.after.some((a) => stillOpen.has(a)) ? 'locked' : 'ready';
+    const kids = new Map(); for (const s of steps) for (const a of s.after) { if (!kids.has(a)) kids.set(a, []); kids.get(a).push(s.id); }
+    // notes: a note named after a step, its workflow, or the project
+    const stem = (p) => p.split('/').pop().replace(/\.md$/, '');
+    const notes = [...pd.notes, ...pd.library].map((path) => ({ path, stem: stem(path), title: humanize(stem(path), key) }));
+    const noteFor = (s) => notes.filter((n) => n.stem === s.id || (s.f.workflow && n.stem === s.f.workflow) || (n.stem.length > 6 && s.id.startsWith(n.stem + '-')));
+    for (const s of steps) s.notes = noteFor(s);
+    const projNotes = notes.filter((n) => n.stem === key || n.stem.startsWith(key + '-') && !steps.some((s) => s.notes.includes(n)));
+    const gl = pd.goals.split('\n').find((l) => l.includes(`[project:: ${key}]`));
+    const goalFull = gl ? gl.replace(/^- /, '').replace(/\[[^\]]*\]/g, '').trim() : '';
+    const goalName = goalFull.replace(new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':\\s*', 'i'), '');
+    const g = (next.goals || []).find((x) => goalFull && x.name.toLowerCase().includes(goalFull.split(':')[0].toLowerCase()));
+    return { name, key, steps, byId, kids, projNotes, goal: goalName, goalPct: g ? g.percent : null, every: np ? np.every : '' };
+  }
+  const order = (a, b) => ({ done: 0, saved: 1, ready: 2, locked: 3 }[a.state] - { done: 0, saved: 1, ready: 2, locked: 3 }[b.state]) || (a.rank ?? 999) - (b.rank ?? 999);
+  const stateWords = { done: 'Done', saved: 'Saved, the planner is updating', ready: 'Ready now', locked: 'Locked' };
+
+  function openProject(name) { curProject = name; store.set('deskProject', name); sel = null; show('project'); drawProjectPage(); }
+  $('projBack').onclick = () => show(store.get('deskBack', 'home'));
+  for (const b of document.querySelectorAll('[data-pv]')) b.onclick = () => { pv = b.dataset.pv; store.set('deskPV', pv); drawProjectPage(); };
+
+  async function drawProjectPage(force) {
+    if (!curProject || !next) return;
+    $('pName').textContent = curProject;
+    try { await planData(force); } catch (e) { status(e.message, true); return; }
+    model = projectModel(curProject);
+    const m = model, n = (st) => m.steps.filter((s) => s.state === st).length;
+    $('pKicker').textContent = todayProject()?.name === m.name ? "Today's project" : 'Project';
+    $('pSummary').textContent = [m.goal && `Goal: ${m.goal}${m.goalPct != null ? ` (${m.goalPct}%)` : ''}`, `${n('ready')} ready now`, n('locked') && `${n('locked')} locked`, `${n('done')} done`, m.every && `every ${m.every}`].filter(Boolean).join(' · ');
+    for (const b of document.querySelectorAll('[data-pv]')) b.classList.toggle('on', b.dataset.pv === pv);
+    $('pFlow').classList.toggle('hidden', pv !== 'flow');
+    $('pGraph').classList.toggle('hidden', pv !== 'graph');
+    if (pv === 'flow') { stopGraph(); drawFlow(m); } else drawGraph(m);
+    drawDetail();
+  }
+  function select(id) { sel = id; drawDetail(); for (const el of document.querySelectorAll('.fnode')) el.classList.toggle('sel', el.dataset.id === id); if (pv === 'graph') highlight(id); }
+
+  // --- Flow: columns left to right; a line means "finish this to unlock that" ---
+  const LOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  function drawFlow(m) {
+    const box = $('pFlow'); box.innerHTML = '';
+    const chain = m.steps.filter((s) => s.after.some((a) => m.byId.has(a)) || m.kids.has(s.id));
+    const level = new Map();
+    const lv = (s, seen = new Set()) => { if (level.has(s.id)) return level.get(s.id); if (seen.has(s.id)) return 0; seen.add(s.id); const ps = s.after.map((a) => m.byId.get(a)).filter(Boolean); const v = ps.length ? 1 + Math.max(...ps.map((p) => lv(p, seen))) : 0; level.set(s.id, v); return v; };
+    chain.forEach((s) => lv(s));
+    if (chain.length) {
+      const panel = document.createElement('section'); panel.className = 'panel';
+      panel.innerHTML = '<div class="pad" style="padding-bottom:0"><div class="kicker">Unlock path</div><p class="dim" style="margin:6px 0 0">Finish a step to unlock the ones its line leads to. Locked steps open once everything before them is done.</p></div><div class="flowwrap"><div class="flow"></div></div>';
+      const flow = panel.querySelector('.flow');
+      const cols = []; for (const s of chain) { const l = level.get(s.id); (cols[l] = cols[l] || []).push(s); }
+      cols.forEach((c) => c.sort(order));
+      const W = 240, H = 92, GX = 96, GY = 16, TOP = 26, tall = Math.max(...cols.map((c) => c.length));
+      const pos = new Map();
+      cols.forEach((c, ci) => { const off = (tall - c.length) * (H + GY) / 2; c.forEach((s, i) => pos.set(s.id, { x: ci * (W + GX), y: TOP + off + i * (H + GY) })); });
+      const width = cols.length * (W + GX) - GX, height = TOP + tall * (H + GY) - GY;
+      flow.style.width = width + 'px'; flow.style.height = height + 'px';
+      const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('width', width); svg.setAttribute('height', height);
+      svg.innerHTML = '<defs><marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e0a050"/></marker><marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#566168"/></marker></defs>';
+      for (const s of chain) for (const a of s.after) {
+        const p = pos.get(a), q = pos.get(s.id); if (!p || !q) continue;
+        const open = ['done', 'saved'].includes(m.byId.get(a).state);
+        const x1 = p.x + W, y1 = p.y + H / 2, x2 = q.x - 4, y2 = q.y + H / 2, mx = (x1 + x2) / 2;
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', `M${x1} ${y1}C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`);
+        path.setAttribute('fill', 'none'); path.setAttribute('stroke', open ? '#e0a050' : '#566168'); path.setAttribute('stroke-width', open ? '2' : '1.5');
+        if (!open) path.setAttribute('stroke-dasharray', '5 5');
+        path.setAttribute('marker-end', `url(#${open ? 'arrA' : 'arrG'})`);
+        svg.appendChild(path);
+      }
+      flow.appendChild(svg);
+      cols.forEach((c, ci) => { const h = document.createElement('div'); h.className = 'colhead'; h.style.left = ci * (W + GX) + 'px'; h.textContent = ci === 0 ? 'First' : ci === 1 ? 'Unlocks next' : `Then (${ci + 1})`; flow.appendChild(h); });
+      for (const s of chain) {
+        const p = pos.get(s.id), b = document.createElement('button');
+        b.className = `fnode ${s.state === 'saved' ? 'done' : s.state}` + (sel === s.id ? ' sel' : ''); b.dataset.id = s.id;
+        b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+        const before = s.after.map((a) => m.byId.get(a)).filter((x) => x && ['ready', 'locked'].includes(x.state));
+        b.innerHTML = '<span class="ft"></span><span class="fs"></span>';
+        b.firstChild.textContent = s.title;
+        if (s.state === 'locked') { b.lastChild.innerHTML = LOCK; b.lastChild.append(` After: ${before.map((x) => x.title).join(', ')}`); }
+        else b.lastChild.textContent = s.state === 'done' ? `✓ Done${s.date ? ' ' + s.date.slice(5).replace('-', '/') : ''}` : s.state === 'saved' ? '✓ Saved, the planner is updating' : `Ready${s.who ? ' · ' + whoWords(s.who) : ''}${s.outside ? ' · from ' + s.outside : ''}`;
+        b.title = s.title; b.onclick = () => select(s.id);
+        flow.appendChild(b);
+      }
+      box.appendChild(panel);
+    }
+    // steps with nothing before or after them
+    const free = m.steps.filter((s) => !chain.includes(s));
+    const ready = free.filter((s) => ['ready', 'saved'].includes(s.state)).sort(order), done = free.filter((s) => s.state === 'done');
+    const rp = document.createElement('section'); rp.className = 'panel';
+    rp.innerHTML = `<div class="pad"><div class="kicker">${chain.length ? 'Ready any time · nothing has to come first' : 'Ready now'}</div><p class="dim" style="margin:6px 0 4px">${chain.length ? 'These don’t unlock anything yet. Most important first.' : 'None of these steps waits on another yet. Most important first.'}</p><ol class="list plist"></ol></div>`;
+    const ol = rp.querySelector('ol');
+    ready.forEach((s, i) => {
+      const li = document.createElement('li'); if (i === 0) li.className = 'first';
+      li.innerHTML = '<span class="n"></span><span class="t"><button></button><small></small></span>';
+      li.querySelector('.n').textContent = i + 1;
+      li.querySelector('button').textContent = s.title; li.querySelector('button').onclick = () => select(s.id);
+      li.querySelector('small').textContent = s.state === 'saved' ? 'Saved, the planner is updating' : [s.who && whoWords(s.who), s.matters != null && `matters ${s.matters}/10`].filter(Boolean).join(' · ');
+      if (s.state === 'ready') { const t = document.createElement('button'); t.className = 'tick'; t.textContent = '✓'; t.setAttribute('aria-label', 'Mark done: ' + s.title); t.onclick = () => markDone(s); li.appendChild(t); }
+      ol.appendChild(li);
+    });
+    if (!ready.length) ol.innerHTML = '<li class="dim">Nothing here.</li>';
+    box.appendChild(rp);
+    if (done.length) {
+      const dp = document.createElement('section'); dp.className = 'panel';
+      dp.innerHTML = '<div class="pad"><div class="kicker" style="color:var(--moss)">Finished</div><div class="chips" style="margin-top:12px"></div></div>';
+      for (const s of done) { const c = document.createElement('button'); c.className = 'chip'; c.textContent = '✓ ' + s.title; c.onclick = () => select(s.id); dp.querySelector('.chips').appendChild(c); }
+      box.appendChild(dp);
+    }
+  }
+
+  // --- Graph: an Obsidian-style map; drag the dots, hover to light up what's connected ---
+  let anim = 0, G = null;
+  const stopGraph = () => { cancelAnimationFrame(anim); anim = 0; };
+  function drawGraph(m) {
+    stopGraph();
+    const svg = $('graphSvg'), NS = 'http://www.w3.org/2000/svg';
+    const W = svg.clientWidth || 860, H = 620; svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = '';
+    const nodes = [], links = [], idx = new Map();
+    const node = (o) => { idx.set(o.id, nodes.length); nodes.push({ ...o, x: 0, y: 0, vx: 0, vy: 0 }); };
+    node({ id: '#project', kind: 'project', label: m.name, r: 20 });
+    if (m.goal) { node({ id: '#goal', kind: 'goal', label: 'Goal: ' + m.goal, r: 13 }); links.push(['#goal', '#project', 'goal']); }
+    for (const s of m.steps) node({ id: s.id, kind: 'step', state: s.state, label: s.title, r: s.state === 'ready' ? 9 : 7 });
+    for (const s of m.steps) {
+      const ps = s.after.filter((a) => idx.has(a));
+      if (ps.length) for (const a of ps) links.push([a, s.id, 'after']); else links.push(['#project', s.id, 'part']);
+      for (const n of s.notes) { if (!idx.has('note:' + n.path)) node({ id: 'note:' + n.path, kind: 'note', label: n.title, r: 5, path: n.path }); links.push([s.id, 'note:' + n.path, 'note']); }
+    }
+    for (const n of m.projNotes) { if (!idx.has('note:' + n.path)) node({ id: 'note:' + n.path, kind: 'note', label: n.title, r: 5, path: n.path }); links.push(['#project', 'note:' + n.path, 'note']); }
+    // start on a circle so the layout comes out the same each time
+    nodes.forEach((n, i) => { const a = (i / nodes.length) * Math.PI * 2, rr = n.kind === 'project' ? 0 : 160 + (i % 3) * 40; n.x = W / 2 + Math.cos(a) * rr; n.y = H / 2 + Math.sin(a) * rr; });
+    const L = links.map(([a, b, kind]) => ({ s: nodes[idx.get(a)], t: nodes[idx.get(b)], kind }));
+    const lenOf = { goal: 130, part: 190, after: 110, note: 60 };
+    svg.innerHTML = '<defs><marker id="gArr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e0a050"/></marker><filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3.5"/></filter></defs>';
+    const gE = document.createElementNS(NS, 'g'), gN = document.createElementNS(NS, 'g'); svg.append(gE, gN);
+    for (const l of L) {
+      const e = document.createElementNS(NS, 'line'); e.classList.add('ge');
+      e.setAttribute('stroke', l.kind === 'after' ? '#e0a050' : l.kind === 'note' ? '#5d6f7b' : '#46525a');
+      e.setAttribute('stroke-width', l.kind === 'after' ? 1.8 : 1.1);
+      if (l.kind === 'after') e.setAttribute('marker-end', 'url(#gArr)');
+      if (l.kind === 'after' && l.s.state !== 'done' && l.s.state !== 'saved') e.setAttribute('stroke-dasharray', '4 4');
+      gE.appendChild(e); l.el = e;
+    }
+    const fill = (n) => n.kind === 'project' ? '#e07a3f' : n.kind === 'goal' ? '#f2c27a' : n.kind === 'note' ? '#8aa1b1' : n.state === 'done' || n.state === 'saved' ? '#7fa38a' : n.state === 'ready' ? '#e0a050' : '#1a1e21';
+    for (const n of nodes) {
+      const g = document.createElementNS(NS, 'g'); g.classList.add('gn'); g.dataset.id = n.id;
+      if (n.kind === 'step' && n.state === 'ready' || n.kind === 'project') { const h = document.createElementNS(NS, 'circle'); h.setAttribute('r', n.r + 4); h.setAttribute('fill', n.kind === 'project' ? '#e07a3f' : '#e0a050'); h.setAttribute('opacity', '.45'); h.setAttribute('filter', 'url(#glow)'); g.appendChild(h); }
+      const c = document.createElementNS(NS, n.kind === 'note' ? 'rect' : 'circle');
+      if (n.kind === 'note') { c.setAttribute('x', -n.r); c.setAttribute('y', -n.r); c.setAttribute('width', n.r * 2); c.setAttribute('height', n.r * 2); c.setAttribute('rx', 2); } else c.setAttribute('r', n.r);
+      c.setAttribute('fill', fill(n)); c.setAttribute('stroke', n.kind === 'step' && n.state === 'locked' ? '#6b757b' : 'rgba(0,0,0,.35)'); c.setAttribute('stroke-width', n.kind === 'step' && n.state === 'locked' ? 1.6 : 1);
+      g.appendChild(c);
+      const t = document.createElementNS(NS, 'text'); t.classList.add('gl'); if (n.kind === 'project' || n.kind === 'goal') t.classList.add('big');
+      t.setAttribute('text-anchor', 'middle'); t.setAttribute('y', n.r + 14);
+      // short label by default; the full name shows on hover (and for its neighbours)
+      n.short = n.kind === 'project' || n.label.length <= 24 ? n.label : n.label.slice(0, n.label.lastIndexOf(' ', 22) > 10 ? n.label.lastIndexOf(' ', 22) : 22) + '…';
+      n.full = n.label.length > 70 ? n.label.slice(0, 68) + '…' : n.label;
+      t.textContent = n.short; n.t = t;
+      g.appendChild(t);
+      const tt = document.createElementNS(NS, 'title'); tt.textContent = n.label + (n.kind === 'step' ? ` (${stateWords[n.state]})` : ''); g.appendChild(tt);
+      gN.appendChild(g); n.el = g;
+    }
+    G = { nodes, L, svg, W, H, alpha: 1, drag: null };
+    const nb = new Map(nodes.map((n) => [n.id, new Set([n.id])]));
+    for (const l of L) { nb.get(l.s.id).add(l.t.id); nb.get(l.t.id).add(l.s.id); }
+    G.nb = nb;
+    const step = () => {
+      const a = G.alpha;
+      for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+        const p = nodes[i], q = nodes[j]; let dx = q.x - p.x, dy = q.y - p.y, d2 = dx * dx + dy * dy || 1; const d = Math.sqrt(d2);
+        if (d > 520) continue; const f = 6000 / d2 * a; dx /= d; dy /= d; p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f;
+      }
+      for (const l of L) { const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y, d = Math.hypot(dx, dy) || 1, f = (d - lenOf[l.kind]) * 0.04 * a; l.s.vx += dx / d * f; l.s.vy += dy / d * f; l.t.vx -= dx / d * f; l.t.vy -= dy / d * f; }
+      for (const n of nodes) {
+        if (n === G.drag) { n.vx = n.vy = 0; continue; }
+        n.vx += (W / 2 - n.x) * 0.003 * a; n.vy += (H / 2 - n.y) * 0.005 * a;
+        n.vx *= 0.82; n.vy *= 0.82; n.x += n.vx; n.y += n.vy;
+        n.x = Math.max(30, Math.min(W - 30, n.x)); n.y = Math.max(24, Math.min(H - 34, n.y));
+      }
+      G.alpha = Math.max(G.drag ? 0.3 : 0, a * 0.985);
+    };
+    const paint = () => {
+      for (const l of L) { const dx = l.t.x - l.s.x, dy = l.t.y - l.s.y, d = Math.hypot(dx, dy) || 1, k = l.kind === 'after' ? (l.t.r + 3) / d : 0; l.el.setAttribute('x1', l.s.x); l.el.setAttribute('y1', l.s.y); l.el.setAttribute('x2', l.t.x - dx * k); l.el.setAttribute('y2', l.t.y - dy * k); }
+      for (const n of nodes) n.el.setAttribute('transform', `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`);
+    };
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (still) { for (let i = 0; i < 400; i++) step(); paint(); }
+    else { for (let i = 0; i < 60; i++) step(); const loop = () => { step(); paint(); anim = G.alpha > 0.02 || G.drag ? requestAnimationFrame(loop) : 0; }; G.kick = () => { if (!anim) anim = requestAnimationFrame(loop); }; loop(); }
+    if (still) G.kick = () => { for (let i = 0; i < 40; i++) step(); paint(); };
+    // pointer: drag a dot, or click it to see it on the right
+    const pt = (e) => { const r = svg.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
+    let downAt = null;
+    svg.onpointerdown = (e) => { const g = e.target.closest('.gn'); if (!g) return; const n = nodes[idx.get(g.dataset.id)]; G.drag = n; downAt = pt(e); svg.setPointerCapture(e.pointerId); svg.classList.add('dragging'); G.alpha = Math.max(G.alpha, 0.4); G.kick(); };
+    svg.onpointermove = (e) => {
+      if (G.drag) { const p = pt(e); G.drag.x = p.x; G.drag.y = p.y; if (matchMedia('(prefers-reduced-motion: reduce)').matches) G.kick(); return; }
+      const g = e.target.closest('.gn'); highlight(g ? g.dataset.id : sel);
+    };
+    svg.onpointerup = (e) => {
+      if (!G.drag) return; const n = G.drag, p = pt(e); G.drag = null; svg.classList.remove('dragging');
+      if (downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) < 5) { if (n.kind === 'step') select(n.id); else if (n.kind === 'note') openNote(n.path, n.label); else { sel = null; drawDetail(); highlight(null); } }
+      G.kick();
+    };
+    svg.onpointerleave = () => { if (!G.drag) highlight(sel); };
+    highlight(sel);
+  }
+  function highlight(id) {
+    if (!G || pv !== 'graph') return;
+    const keep = id && G.nb.get(id);
+    for (const n of G.nodes) { n.el.classList.toggle('fade', !!keep && !keep.has(n.id)); n.t.textContent = keep && keep.has(n.id) ? n.full : n.short; }
+    for (const l of G.L) l.el.classList.toggle('fade', !!keep && !(l.s.id === id || l.t.id === id));
+  }
+
+  // --- the panel on the right: one step, its links, and Done ---
+  function drawDetail() {
+    const p = $('pDetail'), m = model; if (!m) return; p.innerHTML = '';
+    const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; p.appendChild(e); return e; };
+    const s = sel && m.byId.get(sel);
+    if (!s) {
+      el('div', 'kicker k', 'Project');
+      el('h3', '', m.name);
+      if (m.goal) el('p', 'meta', `Goal: ${m.goal}`);
+      el('p', 'dim', 'Click any step to see what it needs first, what it unlocks, and its notes.');
+      const nxt = m.steps.filter((x) => x.state === 'ready').sort(order)[0];
+      if (nxt) { el('div', 'sub', 'Most important ready step'); const b = el('button', 'lk', nxt.title); b.onclick = () => select(nxt.id); }
+      if (m.projNotes.length) { el('div', 'sub', 'Notes'); for (const n of m.projNotes) { const b = el('button', 'lk', '▪ ' + n.title); b.onclick = () => openNote(n.path, n.title); } }
+      return;
+    }
+    const color = { done: 'var(--moss)', saved: 'var(--moss)', ready: 'var(--brass)', locked: 'var(--lock)' }[s.state];
+    const badge = el('span', 'badge', stateWords[s.state]); badge.style.color = color;
+    el('h3', '', s.title);
+    const meta = [s.who && `Who: ${whoWords(s.who)}`, s.matters != null && `matters ${s.matters}/10`, s.f.size && `size ${s.f.size}`, s.f.est && `about ${s.f.est} h`, s.f.mode && s.f.mode, s.outside && `from ${s.outside}`, s.date && `finished ${s.date}`].filter(Boolean).join(' · ');
+    if (meta) el('p', 'meta', meta);
+    if (s.f.note || s.note) el('p', 'dim', s.f.note || s.note).style.marginTop = '0';
+    const before = s.after.map((a) => m.byId.get(a)).filter(Boolean), unlocks = (m.kids.get(s.id) || []).map((k) => m.byId.get(k)).filter(Boolean);
+    if (before.length) { el('div', 'sub', 'Needs first'); for (const b of before) { const x = el('button', 'lk', `${['done', 'saved'].includes(b.state) ? '✓' : '○'} ${b.title}`); x.onclick = () => select(b.id); } }
+    if (unlocks.length) { el('div', 'sub', 'Unlocks'); for (const u of unlocks) { const x = el('button', 'lk', `→ ${u.title}`); x.onclick = () => select(u.id); } }
+    if (s.notes?.length) { el('div', 'sub', 'Notes'); for (const n of s.notes) { const x = el('button', 'lk', '▪ ' + n.title); x.onclick = () => openNote(n.path, n.title); } }
+    if (s.state === 'locked') { const w = before.filter((b) => !['done', 'saved'].includes(b.state)); el('p', 'dim', `Locked until you finish: ${w.map((b) => b.title).join(', ')}.`).style.margin = '16px 0 0'; }
+    const row = el('div', 'row'); row.style.marginTop = '18px';
+    if (s.state === 'ready') { const b = document.createElement('button'); b.className = 'btn primary small'; b.textContent = 'Mark done'; b.onclick = () => markDone(s); row.appendChild(b); }
+    const back = document.createElement('button'); back.className = 'btn small'; back.textContent = 'Close'; back.onclick = () => select(null); row.appendChild(back);
+  }
+  async function openNote(path, title) {
+    const p = $('pDetail');
+    let box = p.querySelector('.notebody');
+    if (!box) { const h = document.createElement('div'); h.className = 'sub'; h.textContent = 'Note: ' + title; p.appendChild(h); box = document.createElement('div'); box.className = 'notebody'; p.appendChild(box); }
+    else box.previousElementSibling.textContent = 'Note: ' + title;
+    box.textContent = 'Opening…';
+    try { box.textContent = (await getFile(path)).replace(/\r\n/g, '\n').trim() || '(empty)'; } catch (e) { box.textContent = e.message; }
+  }
+  function markDone(s) {
+    if (!confirm(`Mark “${s.title}” as done?`)) return;
+    isDoneLocally.add(s.id); drawProjectPage();
+    send([`done: ${s.id}`], `“${s.title}” checked off`);
+  }
 
   // ---------- typing to the planner (the same reading as the phone's typed box) ----------
   function tell() {
@@ -470,8 +849,12 @@
 
   // ---------- side bar and views ----------
   function show(view) {
+    const was = store.get('deskView');
+    if (view === 'project' && was && was !== 'project') store.set('deskBack', was);
     for (const s of document.querySelectorAll('.view-sec')) s.classList.toggle('hidden', s.id !== 'v-' + view);
-    for (const b of document.querySelectorAll('.nav[data-view]')) b.classList.toggle('on', b.dataset.view === view);
+    for (const b of document.querySelectorAll('.nav[data-view]')) b.classList.toggle('on', b.dataset.view === view || (view === 'project' && b.dataset.view === 'projects'));
+    $('mainCol').classList.toggle('wide', view === 'project');
+    if (view !== 'project') stopGraph();
     store.set('deskView', view);
   }
   for (const b of document.querySelectorAll('[data-view]')) b.onclick = () => show(b.dataset.view);
@@ -496,11 +879,12 @@
       next = parseNext(raw);
       for (const id of [...isDoneLocally]) if (![...next.tasks, ...next.projects.flatMap((p) => p.steps.flatMap((s) => s.ids)), ...(next.planIds || []).flat(), ...(next.todayIds || []).flat()].includes(id)) isDoneLocally.delete(id);
       render();
+      if (store.get('deskView') === 'project') await drawProjectPage(true);
       if (!busy) status('');
     } catch (e) { status(e.message, true); }
   }
   globalThis.__deskRefresh = refresh; // for testing with ?mock
-  show(['home', 'today', 'projects', 'workout', 'shopping', 'week', 'goals'].includes(store.get('deskView')) ? store.get('deskView') : 'home');
+  show(['home', 'today', 'projects', 'workout', 'shopping', 'week', 'goals'].includes(store.get('deskView')) || (store.get('deskView') === 'project' && curProject) ? store.get('deskView') : 'home');
   refresh();
   // keep it current: every 5 minutes, and when you come back to the tab
   setInterval(() => { if (!busy && !confirmKind) refresh(); }, 5 * 60e3);

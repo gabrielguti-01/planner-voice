@@ -1,4 +1,4 @@
-// The journal link: an optional "Keep in mind today" strip and "Why:" tags, served by the owner's private journal app
+// The journal link: an optional "Keep in mind today" strip and "Your why:" tags, served by the owner's private journal app
 // running on this same computer (http://127.0.0.1:<port>). Owner request, 2026-11-02.
 //
 // Privacy, on purpose:
@@ -97,10 +97,10 @@
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; e.dataset.jl = ''; return e; };
 
-  // "Why: …" (when tagged) and the small "why?" control, added to one task's place on the screen
+  // "Your why: …" (when tagged; the planner's own "Why:" line is separate) and the small "why?" control, added to one task's place on the screen
   function decorate(box, rawId, title, place) {
     const w = whyFor(rawId);
-    if (w) box.appendChild(el('span', 'jl-why', 'Why: ' + w.text));
+    if (w) box.appendChild(el('span', 'jl-why', 'Your why: ' + w.text));
     if (READ_ONLY || !data.labels.length) return;
     const id = stable(rawId), at = place + '|' + id;
     if (editing === at) { box.appendChild(picker(id, w, title)); return; }
@@ -113,7 +113,7 @@
   }
   function picker(id, w, title) {
     const f = el('div', 'jl-edit'), sel = el('select'), save = el('button', '', 'Save'), cancel = el('button', '', 'Cancel'), note = el('span', 'jl-why');
-    sel.setAttribute('aria-label', 'Why for: ' + title);
+    sel.setAttribute('aria-label', 'Your why for: ' + title);
     sel.appendChild(el('option', '', 'None')).value = '';
     for (const l of data.labels) { const o = el('option', '', l.label ? `${l.text} (${l.label})` : l.text); o.value = l.key; sel.appendChild(o); }
     sel.value = w && data.labels.some((l) => l.key === w.key) ? w.key : '';

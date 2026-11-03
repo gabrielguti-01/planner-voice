@@ -2,6 +2,14 @@
 <html lang="en" data-theme="tile" data-orn="1">
 <head>
 <meta charset="utf-8">
+<script>
+// On a laptop (wide screen with a mouse) open the laptop layout. "?phone" keeps this page.
+try {
+  if (!/[?&]phone\b/.test(location.search) && innerWidth >= 900 && matchMedia('(pointer: fine)').matches) {
+    location.replace('desk/');
+  }
+} catch (e) {}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16040a">
 <meta name="robots" content="noindex">

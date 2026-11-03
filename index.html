@@ -5,7 +5,7 @@
 <script>
 // On a laptop (wide screen with a mouse) open the laptop layout. "?phone" keeps this page.
 try {
-  if (!/[?&]phone\b/.test(location.search) && innerWidth >= 900 && matchMedia('(pointer: fine)').matches) {
+  if (!/[?&]phone\b/.test(location.search) && innerWidth >= 900 && matchMedia('(any-pointer: fine)').matches) {
     location.replace('desk/');
   }
 } catch (e) {}

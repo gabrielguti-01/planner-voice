@@ -257,15 +257,20 @@
     busy = true; setButtons(false);
     try {
       await appendInbox(lines);
-      status(`Saved: ${doneText}. The planner is working out what's next…`);
+      // Say it right on the card: the planner runs on GitHub and takes 2 to 4 minutes
+      $('stepKicker').textContent = 'Saved ✓';
+      $('step').textContent = `Saved: ${doneText}.`;
+      $('stepWhy').textContent = 'The planner is working out your next action. That takes 2 to 4 minutes; this page changes by itself.';
+      $('stepActions').classList.add('hidden');
+      status('');
       const before = next?.made;
-      for (let i = 0; i < 18 && !MOCK; i++) {
-        await new Promise((r) => setTimeout(r, 10e3));
-        const fresh = parseNext(await getNext());
-        if (fresh.made !== before) break;
+      let caughtUp = MOCK;
+      for (let i = 0; i < 40 && !caughtUp; i++) { // up to 10 minutes
+        await new Promise((r) => setTimeout(r, 15e3));
+        try { caughtUp = parseNext(await getNext()).made !== before; } catch {}
       }
       await refresh();
-      status(`Saved: ${doneText}.`);
+      status(caughtUp ? `Saved: ${doneText}.` : `Saved: ${doneText}. The planner hasn't caught up yet; this page will refresh on its own.`);
     } catch (e) { status(`Not saved: ${e.message}`, true); }
     finally { busy = false; setButtons(true); }
   }

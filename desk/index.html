@@ -166,6 +166,15 @@
   .soldlg input { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--btn-line); background: var(--side); }
   .badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; }
   .notebody { white-space: pre-wrap; font-size: 13px; color: var(--dim); max-height: 340px; overflow: auto; border-top: 1px solid var(--row); margin-top: 10px; padding-top: 10px; }
+  /* the flow chart: at most four columns ("rows"), a quick-wins column on request, reorganize on request */
+  .flowbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 22px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .bubble { margin: 12px 22px 0; padding: 14px 16px; border: 1px solid var(--hair); border-radius: 12px; background: var(--card); }
+  .bubble p { margin: 0 0 10px; }
+  .bubble.calm { background: none; border-color: #3f5a49; color: var(--moss); }
+  .tcard.quick { border-style: solid; border-color: var(--rain); }
+  .tcard .tuck { font-size: 12px; color: var(--moss); }
+  .colhead.q { color: var(--rain); }
+  .tcard.goal.small { min-height: 0; }
   @media (max-width: 760px) { nav.side { display: none; } main { padding: 24px 16px 48px; } h1.step { font-size: 30px; } .card { padding: 22px; } }
 </style>
 </head>
@@ -256,7 +265,7 @@
       <section id="v-project" class="view-sec hidden">
         <div class="ptop">
           <button class="linkbtn" id="projBack">← Back</button>
-          <div class="seg" role="group" aria-label="How to show the project"><button data-pv="timeline" class="on">Timeline</button><button data-pv="brain">Brain</button></div>
+          <div class="seg" role="group" aria-label="How to show the project"><button data-pv="flow" class="on">Flow</button><button data-pv="brain">Brain</button><button data-pv="list">Task list</button><button data-pv="timeline">Full timeline</button></div>
         </div>
         <div style="margin:14px 0 18px">
           <div class="kicker k" id="pKicker">Project</div>
@@ -564,10 +573,10 @@
   // the solution and why that) and state/history, the areas in definitions/areas.md, project names in
   // definitions/projects.md, the goal in definitions/goals.md, notes in state/notes and state/library.
   // A file that isn't there (404) is read as empty: steps then sit under "Unsorted" and finished ones come from history.
-  let curProject = store.get('deskProject'), pv = store.get('deskPV', 'timeline'), sel = null, model = null, pd = null, showAllLocked = false;
-  if (!['timeline', 'brain'].includes(pv)) pv = pv === 'graph' ? 'brain' : 'timeline';
+  let curProject = store.get('deskProject'), pv = store.get('deskPV', 'flow'), sel = null, model = null, pd = null, showAllLocked = false;
+  if (!['flow', 'brain', 'list', 'timeline'].includes(pv)) pv = pv === 'graph' ? 'brain' : 'flow';
   async function getFile(path) {
-    if (MOCK) { const r = await fetch('/' + path, { cache: 'no-store' }); return r.ok ? r.text() : ''; }
+    if (MOCK) { const r = await fetch('/' + (new URLSearchParams(location.search).get('mockroot') || '') + path, { cache: 'no-store' }); return r.ok ? r.text() : ''; } // test copies only
     const r = await api(path);
     if (r.status === 404) return '';
     if (!r.ok) throw new Error(`GitHub answered ${r.status}.`);
@@ -669,9 +678,9 @@
     const byId = new Map(), steps = [];
     const add = (s) => { byId.set(s.id, s); steps.push(s); return s; };
     const isCheckin = (t) => /-CADENCE(@|$)/.test(t.id);
-    for (const t of all) if (t.f.project === key && !t.closed && !isCheckin(t)) add({ id: t.id, title: t.text, who: t.who, f: t.f, after: idList(t.f.after), state: 'open', rank: rank.get(t.id)?.n ?? 999, matters: rank.get(t.id)?.matters ?? null, area: t.f.area || '', cameUp: t.f.came_up || '', similarIds: idList(t.f.similar) });
+    for (const t of all) if (t.f.project === key && !t.closed && !isCheckin(t)) add({ id: t.id, title: t.text, who: t.who, f: t.f, after: idList(t.f.after), before: idList(t.f.before), state: 'open', rank: rank.get(t.id)?.n ?? 999, matters: rank.get(t.id)?.matters ?? null, area: t.f.area || '', cameUp: t.f.came_up || '', similarIds: idList(t.f.similar) });
     // finished: the solved record (real titles, the solution and why), then history for anything it doesn't have
-    for (const [id, s] of pd.solved) if (s.project === key && !byId.has(id)) add({ id, title: s.title, f: s.f, after: idList(s.f.after), state: 'done', date: s.f.done || hist.get(id)?.date || '', area: s.f.area || '', cameUp: s.f.came_up || '', solved: s });
+    for (const [id, s] of pd.solved) if (s.project === key && !byId.has(id)) add({ id, title: s.title, f: s.f, after: idList(s.f.after), before: idList(s.f.before), state: 'done', date: s.f.done || hist.get(id)?.date || '', area: s.f.area || '', cameUp: s.f.came_up || '', solved: s });
     const wanted = new Set(steps.flatMap((s) => s.after));
     for (const [id, h] of hist) if (!byId.has(id) && (id.startsWith(key + '-') || wanted.has(id))) add({ id, title: humanize(id, key), note: h.note, date: h.date, after: [], state: 'done', f: {} });
     for (const id of wanted) if (!byId.has(id)) {
@@ -716,11 +725,11 @@
     $('pKicker').textContent = todayProject()?.name === m.name ? "Today's project" : 'Project';
     $('pSummary').textContent = [m.goal && `Goal: ${m.goal}${m.goalPct != null ? ` (${m.goalPct}%)` : ''}`, `${n('ready')} ready now`, n('locked') && `${n('locked')} locked`, `${n('done')} done`, m.every && `every ${m.every}`].filter(Boolean).join(' · ');
     for (const b of document.querySelectorAll('[data-pv]')) b.classList.toggle('on', b.dataset.pv === pv);
-    $('pFlow').classList.toggle('hidden', pv !== 'timeline');
+    $('pFlow').classList.toggle('hidden', pv === 'brain');
     $('pGraph').classList.toggle('hidden', pv !== 'brain');
-    if (pv === 'timeline') { stopGraph(); drawTimeline(m); } else drawBrain(m);
+    if (pv === 'brain') drawBrain(m); else { stopGraph(); (pv === 'flow' ? drawFlow : pv === 'list' ? drawList : drawTimeline)(m); }
     drawDetail();
-    if (sel && pv === 'timeline') document.querySelector(`.tcard[data-id="${CSS.escape(sel)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    if (sel && pv !== 'brain') document.querySelector(`.tcard[data-id="${CSS.escape(sel)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
   function select(id) { sel = id; drawDetail(); for (const el of document.querySelectorAll('.tcard')) el.classList.toggle('sel', el.dataset.id === id); if (pv === 'brain') highlight(id); }
 
@@ -827,6 +836,216 @@
     };
     for (const c of cols) for (const s of c.items) flow.appendChild(card(s, c.kind === 'now' || c.kind === 'locked' ? 'open' : c.kind));
     box.appendChild(panel);
+  }
+
+  // --- Flow (user, 2026-11-04): columns left to right, at most four at a time ("rows", in the user's words). A line
+  // means "finish this to unlock that" ([after::]) or "do this first, it affects that" ([before::]); left goes first.
+  // Each new day the finished columns fold away except the last one, and steps finished on earlier days are tucked
+  // away (Full timeline still has them). Reorganizing is the user's own choice and is asked twice. When everything on
+  // screen is done, a note offers a short column of quick wins, more columns, or stopping for the day. Kept per
+  // browser (it's how this screen is laid out, not planner data).
+  const FLOW_MAX = 4, QUICK_MAX = 5;
+  const isDoneS = (s) => !!s && (s.state === 'done' || s.state === 'saved');
+  const doneDay = (s) => (s.state === 'saved' ? today() : s.date || '');
+  const isQuick = (s) => s.state === 'ready' && (s.f.size === 'small' || (+s.f.est > 0 && +s.f.est <= 0.5));
+  function flowCols(m) {
+    const steps = own(m), ids = new Set(steps.map((s) => s.id));
+    const preds = new Map(steps.map((s) => [s.id, []]));
+    for (const s of steps) for (const a of s.after || []) if (ids.has(a) && a !== s.id) preds.get(s.id).push({ from: a, kind: 'unlock' });
+    for (const s of steps) for (const b of s.before || []) if (ids.has(b) && b !== s.id && !preds.get(b).some((p) => p.from === s.id)) preds.get(b).push({ from: s.id, kind: 'first' });
+    const linked = new Set();
+    for (const [id, ps] of preds) if (ps.length) { linked.add(id); for (const p of ps) linked.add(p.from); }
+    const level = new Map();
+    const lv = (id, seen = new Set()) => { if (level.has(id)) return level.get(id); if (seen.has(id)) return 0; seen.add(id); const ps = preds.get(id); const v = ps.length ? 1 + Math.max(...ps.map((p) => lv(p.from, seen))) : 0; level.set(id, v); return v; };
+    const chain = steps.filter((s) => linked.has(s.id)); chain.forEach((s) => lv(s.id));
+    const cols = []; for (const s of chain) (cols[level.get(s.id)] ||= []).push(s);
+    const dense = cols.filter(Boolean); dense.forEach((c) => c.sort(order));
+    const affects = new Map(); for (const [id, ps] of preds) for (const p of ps) if (p.kind === 'first') { if (!affects.has(p.from)) affects.set(p.from, []); affects.get(p.from).push(id); }
+    return { cols: dense, preds, affects, free: steps.filter((s) => !linked.has(s.id)) };
+  }
+  const flowKey = (m) => 'flow.' + m.key;
+  const saveFlow = (m, st) => store.set(flowKey(m), JSON.stringify(st));
+  const greenCol = (F, i) => !!F.cols[i] && F.cols[i].every(isDoneS);
+  // finished columns fold away from `from`, keeping the last of a run of finished columns
+  const foldFrom = (F, from, limit, green = greenCol) => { let s = from; while (s + 1 < limit && green(F, s) && green(F, s + 1)) s++; return s; };
+  // the day's organization folds only what was finished before today: today's progress stays in sight
+  const oldGreen = (F, i) => !!F.cols[i] && F.cols[i].every((s) => isDoneS(s) && doneDay(s) < today());
+  function flowState(m, F) {
+    let st = null; try { st = JSON.parse(store.get(flowKey(m)) || 'null'); } catch {}
+    const n = F.cols.length;
+    if (!st || st.day !== today()) { // the day's own organization
+      const s = foldFrom(F, 0, n, oldGreen);
+      st = { day: today(), start: s, end: s + FLOW_MAX, quick: null, said: '' };
+      saveFlow(m, st);
+    }
+    st.start = Math.max(0, Math.min(st.start, Math.max(0, n - 1)));
+    st.end = Math.max(st.start + 1, Math.min(st.end, st.start + FLOW_MAX));
+    return st;
+  }
+  // small, ready steps from the columns that don't fit yet (else from the Task list), most important first
+  const quickPool = (m, F, st) => {
+    const later = F.cols.slice(st.end).flat().filter(isQuick).sort(order);
+    return (later.length ? later : F.free.filter(isQuick).sort(order)).slice(0, QUICK_MAX);
+  };
+  function drawFlow(m) {
+    const box = $('pFlow'); box.innerHTML = '';
+    const F = flowCols(m), st = flowState(m, F);
+    const panel = document.createElement('section'); panel.className = 'panel';
+    panel.innerHTML = '<div class="pad" style="padding-bottom:0"><div class="kicker">Flow</div><p class="dim" style="margin:6px 0 0">Left goes first. A solid line means “finish this to unlock that”; a dotted line means “do this first, it affects that”. Up to four columns at a time; Full timeline has everything.</p></div>';
+    box.appendChild(panel);
+    if (!F.cols.length) {
+      const p = document.createElement('p'); p.className = 'dim pad'; p.style.margin = '0';
+      p.textContent = 'No step in this project unlocks or comes before another yet, so there’s nothing to chart. They’re all in the Task list.';
+      panel.appendChild(p); return;
+    }
+    const win = F.cols.slice(st.start, st.end);
+    const anchor = win[0].every(isDoneS);
+    const tucked = (s, ci) => isDoneS(s) && doneDay(s) < st.day && !(ci === 0 && anchor);
+    const quickItems = (st.quick || []).map((id) => m.byId.get(id)).filter(Boolean);
+    const allGreen = win.flat().every(isDoneS) && quickItems.every(isDoneS);
+    let open = 0;
+    const cols = win.map((c, ci) => {
+      const items = c.filter((s) => !tucked(s, ci)), hid = c.length - items.length;
+      const head = c.every(isDoneS) ? 'Done' : ['Now', 'Next', 'Then', 'After that'][Math.min(open++, 3)];
+      return { head: head + (hid ? ` · ${hid} done earlier, tucked away` : ''), items, kind: 'win' };
+    });
+    if (quickItems.length) cols.push({ head: 'Quick wins · use the momentum', items: quickItems, kind: 'quick' });
+    cols.push({ head: 'Goal', items: [{ id: '#goal' }], kind: 'goal' });
+    // the note above the chart, only when everything on it is done
+    const more = F.cols.length > st.end, pool = quickPool(m, F, st);
+    if (allGreen) {
+      const b = document.createElement('div');
+      if (st.quick || st.said === 'done' || (!pool.length && !more)) {
+        b.className = 'bubble calm';
+        b.textContent = !pool.length && !more && !st.quick && st.said !== 'done' ? 'Everything on this project’s chart is done.' : 'All done for today. You’re good.';
+      } else {
+        b.className = 'bubble';
+        b.innerHTML = '<p>Everything on the chart is done. Want to keep going? You can also leave it for now and choose later with Reorganize, at the bottom.</p><div class="row"></div>';
+        const row = b.querySelector('.row');
+        const btn = (t, f, primary) => { const x = document.createElement('button'); x.className = 'btn small' + (primary ? ' primary' : ''); x.textContent = t; x.onclick = f; row.appendChild(x); };
+        if (pool.length) btn(`A few quick tasks (${pool.length})`, () => { st.quick = pool.map((s) => s.id); saveFlow(m, st); drawProjectPage(); }, true);
+        if (more && st.end - st.start < FLOW_MAX) btn('Fill in the next columns', () => { st.end = st.start + FLOW_MAX; saveFlow(m, st); drawProjectPage(); });
+        btn('I’m done for today', () => { st.said = 'done'; saveFlow(m, st); drawProjectPage(); });
+      }
+      panel.appendChild(b);
+    }
+    // layout
+    const wrap = document.createElement('div'); wrap.className = 'flowwrap';
+    const flow = document.createElement('div'); flow.className = 'flow'; wrap.appendChild(flow); panel.appendChild(wrap);
+    const W = 250, GX = 72, GY = 16, TOP = 30, hOf = (s, kind) => (kind === 'goal' ? 130 : isDoneS(s) && s.f.solution ? 122 : 100);
+    const pos = new Map();
+    const colH = cols.map((c) => c.items.reduce((h, s) => h + hOf(s, c.kind) + GY, -GY));
+    const tall = Math.max(...colH, 100);
+    cols.forEach((c, ci) => { let y = TOP + (tall - Math.max(colH[ci], 0)) / 2; for (const s of c.items) { pos.set(s.id, { x: ci * (W + GX), y, h: hOf(s, c.kind) }); y += hOf(s, c.kind) + GY; } });
+    const width = cols.length * (W + GX) - GX, height = TOP + tall;
+    flow.style.width = width + 'px'; flow.style.height = height + 'px';
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', width); svg.setAttribute('height', height);
+    svg.innerHTML = '<defs><marker id="fA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#e0a050"/></marker><marker id="fG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#566168"/></marker><marker id="fM" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7fa38a"/></marker></defs>';
+    const curve = (p, q, stroke, w, dash, mk) => {
+      const x1 = p.x + W, y1 = p.y + p.h / 2, x2 = q.x - 4, y2 = q.y + q.h / 2, mx = (x1 + x2) / 2;
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', `M${x1} ${y1}C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`);
+      path.setAttribute('fill', 'none'); path.setAttribute('stroke', stroke); path.setAttribute('stroke-width', w);
+      if (dash) path.setAttribute('stroke-dasharray', dash);
+      path.setAttribute('marker-end', `url(#${mk})`); svg.appendChild(path);
+    };
+    for (const [id, ps] of F.preds) for (const pr of ps) {
+      const p = pos.get(pr.from), q = pos.get(id); if (!p || !q || p.x >= q.x) continue;
+      const opened = isDoneS(m.byId.get(pr.from));
+      if (pr.kind === 'unlock') curve(p, q, opened ? '#e0a050' : '#566168', opened ? 2 : 1.5, opened ? '' : '5 5', opened ? 'fA' : 'fG');
+      else curve(p, q, opened ? '#e0a050' : '#8a949a', 1.5, '2 4', opened ? 'fA' : 'fG');
+    }
+    const gp = pos.get('#goal'), last = cols[cols.length - 2];
+    if (gp && last) for (const s of last.items) { const p = pos.get(s.id); if (p) curve(p, gp, '#7fa38a', 1.4, '2 5', 'fM'); }
+    flow.appendChild(svg);
+    cols.forEach((c, ci) => { const h = document.createElement('div'); h.className = 'colhead' + (c.kind === 'quick' ? ' q' : ''); h.style.left = ci * (W + GX) + 'px'; h.style.width = W + 'px'; h.textContent = c.head; flow.appendChild(h); });
+    const all = own(m), doneN = all.filter(isDoneS).length;
+    for (const c of cols) for (const s of c.items) {
+      const p = pos.get(s.id), b = document.createElement('div');
+      b.style.left = p.x + 'px'; b.style.top = p.y + 'px'; b.style.height = p.h + 'px';
+      if (c.kind === 'goal') {
+        b.className = 'tcard goal';
+        b.innerHTML = '<span class="kicker"></span><span class="gt"></span><span class="fs"></span><span class="bar"><i></i></span>';
+        b.querySelector('.kicker').textContent = 'The goal';
+        b.querySelector('.gt').textContent = m.goal || `${m.name}: no goal written yet`;
+        b.querySelector('.fs').textContent = `${doneN} of ${all.length} done`;
+        b.querySelector('.bar i').style.width = (all.length ? Math.max(2, Math.round((doneN / all.length) * 100)) : 0) + '%';
+        flow.appendChild(b); continue;
+      }
+      b.className = `tcard ${s.state === 'saved' ? 'done' : s.state}` + (c.kind === 'quick' ? ' quick' : '') + (sel === s.id ? ' sel' : '');
+      b.dataset.id = s.id; b.tabIndex = 0; b.setAttribute('role', 'button'); b.title = s.title;
+      b.onclick = () => select(s.id); b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(s.id); } };
+      const t = document.createElement('span'); t.className = 'ft'; t.textContent = s.title; b.appendChild(t);
+      const f = document.createElement('span'); f.className = 'fs';
+      if (isDoneS(s)) {
+        if (s.f.solution) { const d = document.createElement('span'); d.className = 'tl'; const k = document.createElement('b'); k.textContent = 'Solution: '; d.append(k, s.f.solution); b.appendChild(d); }
+        f.textContent = s.state === 'saved' ? '✓ Saved, the planner is updating' : `✓ Done${s.date ? ' ' + shortDate(s.date) : ''}`;
+      } else if (s.state === 'locked') {
+        const waits = (s.after || []).map((a) => m.byId.get(a)).filter((x) => x && !isDoneS(x));
+        f.innerHTML = LOCK; f.append(` After: ${waits.map((x) => x.title).join(', ')}`);
+      } else {
+        const aff = (F.affects.get(s.id) || []).filter((id) => !isDoneS(m.byId.get(id))).length;
+        f.textContent = ['Ready', aff && `do first: affects ${aff}`, s.who && whoWords(s.who), c.kind === 'quick' && 'quick'].filter(Boolean).join(' · ');
+      }
+      b.appendChild(f);
+      flow.appendChild(b);
+    }
+    // Reorganize: tucked in at the bottom, and asked twice
+    const bar = document.createElement('div'); bar.className = 'flowbar';
+    const info = document.createElement('span');
+    info.textContent = `Columns ${st.start + 1}–${Math.min(st.end, F.cols.length)} of ${F.cols.length}` + (st.start ? ` · ${st.start} finished column${st.start === 1 ? '' : 's'} folded away` : '') + (F.cols.length > st.end ? ` · ${F.cols.length - st.end} more later` : '');
+    const ctl = document.createElement('div'); ctl.className = 'row';
+    const mk = (t, f, primary) => { const x = document.createElement('button'); x.className = 'btn small' + (primary ? ' primary' : ''); x.textContent = t; x.onclick = f; return x; };
+    const say = (t) => Object.assign(document.createElement('span'), { textContent: t });
+    const reset = () => ctl.replaceChildren(mk('Reorganize flow chart', ask));
+    const sure = (what, apply) => ctl.replaceChildren(say(what), mk('Yes', () => ctl.replaceChildren(say('Are you sure?'), mk('Confirm', apply, true), mk('Cancel', reset))), mk('Cancel', reset));
+    function ask() {
+      if (allGreen) {
+        const pool2 = quickPool(m, F, st);
+        ctl.replaceChildren(say('Everything here is done. Next:'),
+          ...(pool2.length && !st.quick ? [mk(`Quick tasks (${pool2.length})`, () => { st.quick = pool2.map((s) => s.id); saveFlow(m, st); drawProjectPage(); })] : []),
+          mk('Full reorganize', () => sure('Fold away the finished columns and show the next ones?', () => { const s = foldFrom(F, st.start, F.cols.length); Object.assign(st, { start: s, end: s + FLOW_MAX, quick: null, said: '' }); saveFlow(m, st); drawProjectPage(); })),
+          mk('Cancel', reset));
+      } else sure('Reorganize the flow chart? Finished columns fold away except the last one; nothing new is added.', () => { const s = foldFrom(F, st.start, st.end); Object.assign(st, { start: s, quick: null, said: '' }); saveFlow(m, st); drawProjectPage(); });
+    }
+    reset();
+    bar.append(info, ctl);
+    panel.appendChild(bar);
+  }
+
+  // --- Task list: the steps with nothing before or after them, most important first (opened when wanted) ---
+  function drawList(m) {
+    const box = $('pFlow'); box.innerHTML = '';
+    const F = flowCols(m);
+    const ready = F.free.filter((s) => s.state === 'ready' || s.state === 'saved').sort(order);
+    const waiting = F.free.filter((s) => s.state === 'locked').sort(order), done = F.free.filter((s) => s.state === 'done');
+    const panel = document.createElement('section'); panel.className = 'panel';
+    panel.innerHTML = '<div class="pad"><div class="kicker">Ready any time · nothing has to come first</div><p class="dim" style="margin:6px 0 4px">These don’t unlock anything and nothing comes before them. Most important first.</p><ol class="list plist"></ol></div>';
+    const ol = panel.querySelector('ol');
+    ready.forEach((s, i) => {
+      const li = document.createElement('li'); if (i === 0) li.className = 'first';
+      li.innerHTML = '<span class="n"></span><span class="t"><button></button><small></small></span>';
+      li.querySelector('.n').textContent = i + 1;
+      li.querySelector('button').textContent = s.title; li.querySelector('button').onclick = () => select(s.id);
+      li.querySelector('small').textContent = s.state === 'saved' ? 'Saved, the planner is updating' : [s.who && whoWords(s.who), s.matters != null && `matters ${s.matters}/10`, areaName(m, s.area), isQuick(s) && 'quick'].filter(Boolean).join(' · ');
+      if (s.state === 'ready') { const t = document.createElement('button'); t.className = 'tick'; t.textContent = '✓'; t.setAttribute('aria-label', 'Mark done: ' + s.title); t.onclick = () => markDone(s); li.appendChild(t); }
+      ol.appendChild(li);
+    });
+    if (!ready.length) ol.innerHTML = '<li class="dim">Nothing here: every step is on the flow chart.</li>';
+    box.appendChild(panel);
+    if (waiting.length) {
+      const wp = document.createElement('section'); wp.className = 'panel';
+      wp.innerHTML = '<div class="pad"><div class="kicker">Waiting on something outside this project</div><ul class="list plist"></ul></div>';
+      for (const s of waiting) { const li = document.createElement('li'); li.innerHTML = '<span class="t"><button></button></span>'; li.querySelector('button').textContent = s.title; li.querySelector('button').onclick = () => select(s.id); wp.querySelector('ul').appendChild(li); }
+      box.appendChild(wp);
+    }
+    if (done.length) {
+      const dp = document.createElement('section'); dp.className = 'panel';
+      dp.innerHTML = '<div class="pad"><div class="kicker" style="color:var(--moss)">Finished</div><div class="chips" style="margin-top:12px"></div></div>';
+      for (const s of done) { const c = document.createElement('button'); c.className = 'chip'; c.textContent = '✓ ' + s.title; c.onclick = () => select(s.id); dp.querySelector('.chips').appendChild(c); }
+      box.appendChild(dp);
+    }
   }
 
   // --- Brain: the goal (largest dot) → its areas → their steps; dashed lines go to similar things solved before ---
@@ -1009,6 +1228,10 @@
     const before = s.after.map((a) => m.byId.get(a)).filter(Boolean), unlocks = (m.kids.get(s.id) || []).map((k) => m.byId.get(k)).filter(Boolean);
     if (before.length) { el('div', 'sub', 'Needs first'); for (const b of before) { const x = el('button', 'lk', `${['done', 'saved'].includes(b.state) ? '✓' : '○'} ${b.title}`); x.onclick = () => select(b.id); } }
     if (unlocks.length) { el('div', 'sub', 'Unlocks'); for (const u of unlocks) { const x = el('button', 'lk', `→ ${u.title}`); x.onclick = () => select(u.id); } }
+    // "comes first" ([before::]): doesn't lock anything, but doing it first saves rework
+    const affects = (s.before || []).map((id) => m.byId.get(id)).filter(Boolean), firstOf = m.steps.filter((x) => (x.before || []).includes(s.id));
+    if (firstOf.length) { el('div', 'sub', 'Better done after'); for (const b of firstOf) { const x = el('button', 'lk', `${['done', 'saved'].includes(b.state) ? '✓' : '○'} ${b.title}`); x.onclick = () => select(b.id); } }
+    if (affects.length) { el('div', 'sub', 'Do this first: it affects'); for (const u of affects) { const x = el('button', 'lk', `⇢ ${u.title}`); x.onclick = () => select(u.id); } }
     if (s.notes?.length) { el('div', 'sub', 'Notes'); for (const n of s.notes) { const x = el('button', 'lk', '▪ ' + n.title); x.onclick = () => openNote(n.path, n.title); } }
     if (s.similar?.length) {
       el('div', 'sub', 'Similar before');

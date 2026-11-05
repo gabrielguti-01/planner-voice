@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <script>
 // On a laptop (wide screen with a mouse) open the laptop layout. "?phone" keeps this page.
+// A phone always keeps this vertical page, even sideways (user, 2026-11-04).
 try {
-  if (!/[?&]phone\b/.test(location.search) && innerWidth >= 900 && matchMedia('(any-pointer: fine)').matches) {
+  const phone = /iPhone|iPod|Android.+Mobile|Mobile Safari/i.test(navigator.userAgent);
+  if (!phone && !/[?&]phone\b/.test(location.search) && innerWidth >= 900 && matchMedia('(any-pointer: fine)').matches) {
     location.replace('desk/');
   }
 } catch (e) {}

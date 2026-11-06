@@ -402,6 +402,8 @@
   const plain = (s) => (s || '').replace(/[`*_]/g, '').trim();
   // "Step text · matters 6/10 · #15 of 46 across projects" → the step; "waits for X" kept apart
   const stepParts = (text) => { const bits = text.split(' · '); return { title: plain(bits[0].replace(/: (?:YOU|DEV|TEST)(?: \+ \w+)?$/, '')), waits: (bits.find((b) => /^waits for /.test(b)) || '').replace(/^waits for /, '') }; };
+  // the project that comes after today's, from "project day: Harmonic (next: Card Inventory, tomorrow)"
+  const dayNext = () => ((((next && next.plan) || []).find((x) => /^project day: /.test(x)) || '').match(/\(next: ([^,)]+)/) || [])[1] || '';
   function todayProject() {
     const line = (next.plan || []).find((x) => /^project day: /.test(x)) || '';
     const name = (line.match(/^project day: (.+?)(?: \(|$)/) || [])[1] || '';
@@ -954,6 +956,17 @@
         btn('I’m done for today', () => { st.said = 'done'; saveFlow(m, st); drawProjectPage(); });
       }
       panel.appendChild(b);
+      // today's project done on screen: offer to move today on to the next project (user, 2026-11-06: "Harmonic first, then Card Store")
+      const tp = todayProject(), nx = dayNext();
+      if (tp && tp.name === m.name && nx && nx.toLowerCase() !== m.name.toLowerCase()) {
+        const sw = document.createElement('div'); sw.className = 'bubble';
+        sw.innerHTML = '<p></p><div class="row"></div>';
+        sw.querySelector('p').textContent = `${m.name}’s chart is done. Move today over to ${nx}?`;
+        const x = document.createElement('button'); x.className = 'btn small primary'; x.textContent = `Move on to ${nx} now`;
+        x.onclick = () => send([`rotation: ${nx.toLowerCase()} | today`], `today’s project is now ${nx}`);
+        sw.querySelector('.row').appendChild(x);
+        panel.appendChild(sw);
+      }
     }
     // layout
     const wrap = document.createElement('div'); wrap.className = 'flowwrap';

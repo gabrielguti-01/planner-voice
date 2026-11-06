@@ -247,6 +247,7 @@
             </button>
             <div class="steps hidden" id="projSteps"></div>
           </section>
+          <div id="projMore" style="display:flex;flex-direction:column;gap:22px"></div>
 
           <div class="then"><span id="thenLine"></span><button class="linkbtn" data-go="today">See all of today</button></div>
 
@@ -407,8 +408,13 @@
   function todayProject() {
     const line = (next.plan || []).find((x) => /^project day: /.test(x)) || '';
     const name = (line.match(/^project day: (.+?)(?: \(|$)/) || [])[1] || '';
-    return next.projects.find((p) => p.name.toLowerCase() === name.toLowerCase()) || null;
+    // a shared day ("Card Inventory + ShowFloor"): the first of its projects that has steps
+    const names = [name, ...name.split(' + ')].map((x) => x.trim().toLowerCase()).filter(Boolean);
+    for (const n of names) { const p = next.projects.find((q) => q.name.toLowerCase() === n); if (p) return p; }
+    return null;
   }
+  // every project of today's day (one, or the projects of a shared day)
+  const todayProjects = () => { const line = (next.plan || []).find((x) => /^project day: /.test(x)) || ''; const name = (line.match(/^project day: (.+?)(?: \(|$)/) || [])[1] || ''; return name.split(' + ').map((n) => next.projects.find((q) => q.name.toLowerCase() === n.trim().toLowerCase())).filter(Boolean); };
   const isDoneLocally = new Set(); // checked off on this screen while the planner catches up
 
   // ---------- drawing ----------
@@ -432,6 +438,18 @@
     const p = todayProject();
     $('projPanel').classList.toggle('hidden', !p);
     if (p) drawProject(p, $('projSteps'), true);
+    // a shared day: the day's other project gets its own card too
+    $('projMore').innerHTML = '';
+    for (const q of todayProjects().filter((x) => x !== p)) {
+      const sec = document.createElement('section'); sec.className = 'panel';
+      const b = document.createElement('button'); b.className = 'proj-head';
+      b.innerHTML = '<div style="flex:1 1 auto;min-width:0"><div class="kicker k">Today’s project too</div><div class="name"></div><div class="dim"></div></div><span style="color:var(--brass);font-weight:600;white-space:nowrap">Open the project</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+      b.querySelector('.name').textContent = q.name;
+      const ready = q.steps.filter((x) => !stepParts(x.text).waits).length;
+      b.querySelector('.dim').textContent = `${ready} step${ready === 1 ? '' : 's'} ready` + (q.every ? ` · every ${q.every}` : '');
+      b.onclick = () => openProject(q.name);
+      sec.appendChild(b); $('projMore').appendChild(sec);
+    }
     $('thenLine').textContent = next.after?.length ? `Then: ${stepParts(next.after[0]).title}` : '';
     // the other views
     drawToday(); drawAllProjects(); drawWorkout(); drawSimple('shopList', (next.groceries || []).filter((x) => !/^_/.test(x)), 'The shopping list is empty.'); drawSimple('weekList', next.week, 'Nothing dated.'); drawGoals();
@@ -499,7 +517,7 @@
       const d = document.createElement('section'); d.className = 'panel';
       const s = document.createElement('button'); s.className = 'proj-head';
       s.innerHTML = '<div style="flex:1 1 auto;min-width:0"><div class="kicker k"></div><div class="name"></div><div class="dim"></div></div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
-      s.querySelector('.kicker').textContent = tp === p ? "Today's project" : 'Project';
+      s.querySelector('.kicker').textContent = todayProjects().includes(p) ? "Today's project" : 'Project';
       s.querySelector('.name').textContent = p.name;
       s.querySelector('.dim').textContent = `${p.steps.length} open` + (p.every ? ` · every ${p.every}` : '');
       s.onclick = () => openProject(p.name);
@@ -731,7 +749,7 @@
     model = projectModel(curProject);
     if (sel && !model.byId.has(sel)) sel = null;
     const m = model, n = (st) => own(m).filter((s) => s.state === st).length;
-    $('pKicker').textContent = todayProject()?.name === m.name ? "Today's project" : 'Project';
+    $('pKicker').textContent = todayProjects().some((p) => p.name === m.name) ? "Today's project" : 'Project';
     $('pSummary').textContent = [m.goal && `Goal: ${m.goal}${m.goalPct != null ? ` (${m.goalPct}%)` : ''}`, `${n('ready')} ready now`, n('locked') && `${n('locked')} locked`, `${n('done')} done`, m.every && `every ${m.every}`].filter(Boolean).join(' · ');
     for (const b of document.querySelectorAll('[data-pv]')) b.classList.toggle('on', b.dataset.pv === pv);
     $('pFlow').classList.toggle('hidden', pv === 'brain');
@@ -957,8 +975,8 @@
       }
       panel.appendChild(b);
       // today's project done on screen: offer to move today on to the next project (user, 2026-11-06: "Harmonic first, then Card Store")
-      const tp = todayProject(), nx = dayNext();
-      if (tp && tp.name === m.name && nx && nx.toLowerCase() !== m.name.toLowerCase()) {
+      const nx = dayNext();
+      if (todayProjects().some((p) => p.name === m.name) && nx && !nx.toLowerCase().split(' + ').includes(m.name.toLowerCase())) {
         const sw = document.createElement('div'); sw.className = 'bubble';
         sw.innerHTML = '<p></p><div class="row"></div>';
         sw.querySelector('p').textContent = `${m.name}’s chart is done. Move today over to ${nx}?`;

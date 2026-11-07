@@ -168,7 +168,10 @@
   .soldlg { border: 1px solid var(--hair); border-radius: 16px; background: var(--panel); color: var(--ink); padding: 24px 26px; width: min(480px, calc(100vw - 32px)); }
   .soldlg::backdrop { background: rgba(10,12,14,.6); }
   .soldlg h3 { font: 500 24px/1.2 var(--serif); margin: 8px 0 6px; }
-  .soldlg input { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--btn-line); background: var(--side); }
+  .soldlg input, .soldlg textarea { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--btn-line); background: var(--side); color: var(--ink); font: inherit; width: 100%; box-sizing: border-box; resize: vertical; }
+  .soldlg { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-x: hidden; overflow-y: auto; }
+  .soldlg textarea { overflow-x: hidden; overflow-y: auto; }
+  .soldlg .btn.on { background: var(--active); color: var(--brass-hi); box-shadow: inset 0 0 0 1px var(--hair); }
   .badge { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid currentColor; }
   .notebody { font-size: 15px; line-height: 1.6; color: var(--ink); border-top: 1px solid var(--row); margin-top: 10px; padding-top: 6px; }
   /* a step that is open takes the right half of the page, over the chart (user, 2026-11-07: "it can take up half the page") */
@@ -335,8 +338,13 @@
     <div class="kicker" id="solKicker">Mark done</div>
     <h3 id="solTitle"></h3>
     <p class="dim" id="solHint"></p>
-    <div class="field"><label for="solWhat">What was the solution?</label><input id="solWhat" type="text" autocomplete="off"></div>
-    <div class="field"><label for="solWhy">Why that?</label><input id="solWhy" type="text" autocomplete="off"></div>
+    <div class="field"><label for="solWhat">What came out of it?</label><textarea id="solWhat" rows="3" autocomplete="off" placeholder="One point per line"></textarea></div>
+    <div class="field"><label for="solWhy">Reasoning</label><textarea id="solWhy" rows="3" autocomplete="off" placeholder="How you got from one point to the next"></textarea></div>
+    <div class="field" id="solLeadsBox"><label>What does it lead to?</label>
+      <div class="row" style="margin-top:4px"><button type="button" class="btn small" id="solLeadsNo">Nothing: it's settled</button><button type="button" class="btn small" id="solLeadsYes">Next steps</button></div>
+      <p class="dim hidden" id="solWaiting" style="margin:8px 0 0"></p>
+      <textarea id="solNext" class="hidden" rows="3" autocomplete="off" placeholder="One next step per line" style="margin-top:8px"></textarea>
+    </div>
     <div class="row"><button class="btn primary small" id="solSave">Save and mark done</button><button class="btn small" id="solSkip">Skip</button><button class="btn small" id="solCancel">Cancel</button></div>
   </form>
 </dialog>
@@ -879,11 +887,11 @@
         const line = (label, text, cls) => { const d = document.createElement('span'); d.className = 'tl ' + (cls || ''); const k = document.createElement('b'); k.textContent = label + ' '; d.append(k, text); b.appendChild(d); };
         if (s.cameUp) line('Came up:', s.cameUp);
         const sol = s.f.solution, bec = s.f.because;
-        if (sol) line('Solution:', sol);
-        if (bec) line('Why that:', bec);
+        if (sol) line('Came out of it:', sol);
+        if (bec) line('Reasoning:', bec);
         if (!sol && !bec) {
-          const d = document.createElement('span'); d.className = 'tl none'; d.textContent = 'No solution recorded yet'; b.appendChild(d);
-          if (s.solved) { const a = document.createElement('button'); a.className = 'linkbtn addsol'; a.textContent = 'Add solution'; a.onclick = (e) => { e.stopPropagation(); addSolution(s); }; b.appendChild(a); }
+          const d = document.createElement('span'); d.className = 'tl none'; d.textContent = 'Nothing written down yet'; b.appendChild(d);
+          if (s.solved) { const a = document.createElement('button'); a.className = 'linkbtn addsol'; a.textContent = 'Add what came out of it'; a.onclick = (e) => { e.stopPropagation(); addSolution(s); }; b.appendChild(a); }
         }
         const f = document.createElement('span'); f.className = 'fs'; f.textContent = `✓ ${s.state === 'saved' ? 'Saved, the planner is updating' : `Done${s.date ? ' ' + shortDate(s.date) : ''}`} · ${areaName(m, s.area)}`; b.appendChild(f);
         return b;
@@ -1051,7 +1059,7 @@
       const t = document.createElement('span'); t.className = 'ft'; t.textContent = s.title; b.appendChild(t);
       const f = document.createElement('span'); f.className = 'fs';
       if (isDoneS(s)) {
-        if (s.f.solution) { const d = document.createElement('span'); d.className = 'tl'; const k = document.createElement('b'); k.textContent = 'Solution: '; d.append(k, s.f.solution); b.appendChild(d); }
+        if (s.f.solution) { const d = document.createElement('span'); d.className = 'tl'; const k = document.createElement('b'); k.textContent = 'Came out of it: '; d.append(k, s.f.solution); b.appendChild(d); }
         f.textContent = s.state === 'saved' ? '✓ Saved, the planner is updating' : `✓ Done${s.date ? ' ' + shortDate(s.date) : ''}`;
       } else if (s.state === 'locked') {
         const waits = (s.after || []).map((a) => m.byId.get(a)).filter((x) => x && !isDoneS(x));
@@ -1295,8 +1303,8 @@
     const said = (label, text) => { const d = el('div', 'said'); el('b', '', label, d); el('span', '', text, d); };
     said('Why it came up', s.cameUp || 'Not written down.');
     if (s.state === 'done' || s.state === 'saved') {
-      said('Solution', s.f.solution || 'No solution recorded yet.');
-      if (s.f.because || s.f.solution) said('Why that', s.f.because || 'Not written down.');
+      said('What came out of it', s.f.solution || 'Nothing written down yet.');
+      if (s.f.because || s.f.solution) said('Reasoning', s.f.because || 'Not written down.');
       if (s.f.solution_was || s.f.because_was) said('Before that', [s.f.solution_was, s.f.because_was && `because ${s.f.because_was}`].filter(Boolean).join(', '));
     }
     if (s.f.note || s.note) el('p', 'dim', s.f.note || s.note).style.margin = '10px 0 0';
@@ -1317,15 +1325,15 @@
         const b = el('button', 'lk sim');
         el('span', 'st', x.title, b);
         el('small', '', `${nameFor(x.project)}${x.f.done ? ' · ' + shortDate(x.f.done) : ''}`, b);
-        el('small', '', x.f.solution ? `Solution: ${x.f.solution}` : 'No solution recorded', b);
-        if (x.f.because) el('small', '', `Because: ${x.f.because}`, b);
+        el('small', '', x.f.solution ? `Came out of it: ${x.f.solution}` : 'Nothing written down', b);
+        if (x.f.because) el('small', '', `Reasoning: ${x.f.because}`, b);
         b.onclick = () => (x.project === m.key ? select(x.id) : openProject(nameFor(x.project), x.id));
       }
     }
     if (s.state === 'locked') { const w = before.filter((b) => !['done', 'saved'].includes(b.state)); el('p', 'dim', `Locked until you finish: ${w.map((b) => b.title).join(', ')}.`).style.margin = '16px 0 0'; }
     const row = el('div', 'row'); row.style.marginTop = '18px';
     if (s.state === 'ready') { const b = document.createElement('button'); b.className = 'btn primary small'; b.textContent = 'Mark done'; b.onclick = () => markDone(s); row.appendChild(b); }
-    if (s.state === 'done' && s.solved) { const b = document.createElement('button'); b.className = 'btn small'; b.textContent = s.f.solution || s.f.because ? 'Change the solution' : 'Add solution'; b.onclick = () => addSolution(s); row.appendChild(b); }
+    if (s.state === 'done' && s.solved) { const b = document.createElement('button'); b.className = 'btn small'; b.textContent = s.f.solution || s.f.because ? 'Change what came out of it' : 'Add what came out of it'; b.onclick = () => addSolution(s); row.appendChild(b); }
     const back = document.createElement('button'); back.className = 'btn small'; back.textContent = 'Close'; back.onclick = () => select(null); row.appendChild(back);
   }
   async function openNote(path, title) {
@@ -1378,21 +1386,42 @@
     if (!box.childNodes.length) box.textContent = '(empty)';
   }
 
-  // --- Done asks for the solution (project steps): "What was the solution?" and "Why that?", both optional ---
-  const clip = (t) => (t || '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
+  // --- Done asks what came out of it (project steps; user, 2026-11-07: a talk or research has an outcome, not a
+  // "solution"): what came out of it, the reasoning, and whether it leads to anything (yes: the next steps, which
+  // become steps of the same project that this one unlocks; no: it's settled). All optional. ---
+  // several lines (points) become one line "A; B; C"
+  const clip = (t) => (t || '').split(/\n+/).map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean).join('; ').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
   const solLine = (verb, ids, sol, bec) => [`${verb}: ${ids.join(', ')}`, clip(sol) && `solution ${clip(sol)}`, clip(bec) && `because ${clip(bec)}`].filter(Boolean).join(' | ');
   /** Resolves to { solution, because } (Save), {} (Skip), or null (Cancel). mode 'done' or 'solved'. */
-  function askSolution(title, mode = 'done', pre = {}) {
+  function askSolution(title, mode = 'done', pre = {}, waiting = []) {
     const d = $('solDlg');
-    $('solKicker').textContent = mode === 'done' ? 'Mark done' : 'The solution';
+    $('solKicker').textContent = mode === 'done' ? 'Mark done' : 'What came out of it';
     $('solTitle').textContent = title;
-    $('solHint').textContent = mode === 'done' ? 'Both are optional. They stay with the step, so you can look back on why you did it.' : 'Both are optional; an earlier answer is kept too.';
-    $('solWhat').value = pre.solution || ''; $('solWhy').value = pre.because || '';
+    $('solHint').textContent = mode === 'done' ? 'All optional. They stay with the step, so you can look back on what came out of it and why.' : 'Both are optional; an earlier answer is kept too.';
+    $('solWhat').value = pre.solution || ''; $('solWhy').value = pre.because || ''; $('solNext').value = '';
     $('solSave').textContent = mode === 'done' ? 'Save and mark done' : 'Save';
     $('solSkip').classList.toggle('hidden', mode !== 'done');
+    $('solLeadsBox').classList.toggle('hidden', mode !== 'done');
+    let leads = null;
+    const pick = (v) => {
+      leads = v;
+      $('solLeadsYes').classList.toggle('on', v === true); $('solLeadsNo').classList.toggle('on', v === false);
+      $('solNext').classList.toggle('hidden', v !== true);
+      $('solWaiting').classList.toggle('hidden', v !== true || !waiting.length);
+      if (v === true) $('solNext').focus();
+    };
+    $('solWaiting').textContent = waiting.length ? `Already waiting on this: ${waiting.join('; ')}. Add any others below.` : '';
+    $('solLeadsYes').onclick = () => pick(true); $('solLeadsNo').onclick = () => pick(false);
+    pick(null);
     return new Promise((res) => {
       const finish = (v) => { d.onclose = null; if (d.open) d.close(); res(v); };
-      $('solSave').onclick = (e) => { e.preventDefault(); const v = { solution: $('solWhat').value, because: $('solWhy').value }; if (mode !== 'done' && !clip(v.solution) && !clip(v.because)) { $('solWhat').focus(); return; } finish(v); };
+      $('solSave').onclick = (e) => {
+        e.preventDefault();
+        const next = leads === true ? $('solNext').value.split(/\n+/).map((l) => clip(l.replace(/^\s*(\d+[.)]|[-*•])\s*/, ''))).filter(Boolean) : [];
+        const v = { solution: $('solWhat').value, because: $('solWhy').value, next };
+        if (mode !== 'done' && !clip(v.solution) && !clip(v.because)) { $('solWhat').focus(); return; }
+        finish(v);
+      };
       $('solSkip').onclick = (e) => { e.preventDefault(); finish({}); };
       $('solCancel').onclick = (e) => { e.preventDefault(); finish(null); };
       d.onclose = () => res(null);
@@ -1400,11 +1429,17 @@
       $('solWhat').focus();
     });
   }
-  async function doneWithSolution(ids, title, before) {
-    const r = await askSolution(title, 'done');
+  async function doneWithSolution(ids, title, before, s) {
+    // from the home page there is no step object: find the step's project and area in the planner's own list
+    const t = !s ? (pd?.tasks || []).find((x) => ids.includes(x.id) && x.f.project) : null;
+    if (t) s = { id: t.id, area: t.f.area, f: t.f };
+    const waiting = s && model ? (model.kids.get(s.id) || []).map((k) => model.byId.get(k)).filter((x) => x && !['done', 'saved'].includes(x.state)).map((x) => x.title) : [];
+    const r = await askSolution(title, 'done', {}, waiting);
     if (!r) return;
     if (before) before();
-    send([solLine('done', ids, r.solution, r.because)], `“${title}” done`);
+    // the next steps first, each waiting on this one, so the brain keeps "this led to that"
+    const adds = (r.next || []).map((t) => [`add: ${t}`, s?.f.project && `project ${s.f.project}`, s?.area && `area ${s.area}`, `after ${ids[0]}`, `why came out of: ${clip(title)}`].filter(Boolean).join(' | '));
+    send([...adds, solLine('done', ids, r.solution, r.because)], `“${title}” done${adds.length ? `; ${adds.length} next step${adds.length === 1 ? '' : 's'} added` : ''}`);
   }
   async function addSolution(s) {
     const r = await askSolution(s.title, 'solved', { solution: s.f.solution, because: s.f.because });
@@ -1413,7 +1448,7 @@
   }
   function markDone(s) {
     const go = () => { isDoneLocally.add(s.id); drawProjectPage(); };
-    if (isProjectStep([s.id]) || s.f.project) return doneWithSolution([s.id], s.title, go);
+    if (isProjectStep([s.id]) || s.f.project) return doneWithSolution([s.id], s.title, go, s);
     if (!confirm(`Mark “${s.title}” as done?`)) return;
     go(); send([`done: ${s.id}`], `“${s.title}” checked off`);
   }

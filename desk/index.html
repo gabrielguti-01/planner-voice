@@ -188,6 +188,12 @@
   .note li::marker { color: var(--brass); }
   .note p { margin: 0 0 10px; }
   .note code { font-size: .92em; background: var(--row); padding: 1px 5px; border-radius: 4px; }
+  .note .qbox { margin: 14px 0 6px; padding: 12px 16px; border: 1px solid var(--brass); border-radius: 10px; background: rgba(224,160,80,.06); }
+  .note .qbox h4 { margin-top: 0; }
+  .note .qbox textarea { width: 100%; box-sizing: border-box; margin-top: 6px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--btn-line); background: var(--side); color: var(--ink); font: inherit; resize: vertical; }
+  .note details.orig { margin-top: 18px; border-top: 1px solid var(--row); padding-top: 10px; }
+  .note details.orig summary { cursor: pointer; color: var(--dim); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+  .note details.orig > div { color: var(--dim); font-size: 14px; }
   .note .ntitle { font: 500 19px/1.3 var(--serif); margin: 22px 0 2px; color: var(--ink); }
   /* the flow chart: at most four columns ("rows"), a quick-wins column on request, reorganize on request */
   .flowbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 22px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
@@ -674,13 +680,14 @@
   }
   async function planData(force) {
     if (pd && !force && Date.now() - pd.at < 120e3) return pd;
-    const [now, goals, histNames, notes, library, areas, solved, defs] = await Promise.all([getFile('state/now.md'), getFile('definitions/goals.md'), listDir('state/history'), listDir('state/notes'), listDir('state/library'),
-      optional('definitions/areas.md'), optional('state/solved.md'), optional('definitions/projects.md')]);
+    const [now, goals, histNames, notes, library, areas, solved, defs, organized] = await Promise.all([getFile('state/now.md'), getFile('definitions/goals.md'), listDir('state/history'), listDir('state/notes'), listDir('state/library'),
+      optional('definitions/areas.md'), optional('state/solved.md'), optional('definitions/projects.md'), listDir('state/notes/organized')]);
     const months = histNames.filter((n) => /^\d{4}-\d{2}\.md$/.test(n)).sort().slice(-4);
     const hist = (await Promise.all(months.map((n) => getFile('state/history/' + n)))).join('\n');
     const nl = (s) => s.replace(/\r\n/g, '\n');
     pd = { at: Date.now(), now: nl(now), goals: nl(goals), hist: nl(hist), notes: notes.map((n) => 'state/notes/' + n), library: library.map((n) => 'state/library/' + n),
-      areas: parseAreas(nl(areas)), solved: parseSolved(nl(solved)), hasSolved: !!solved.trim(), projs: parseProjDefs(nl(defs)) };
+      areas: parseAreas(nl(areas)), solved: parseSolved(nl(solved)), hasSolved: !!solved.trim(), projs: parseProjDefs(nl(defs)),
+      organized: new Set(organized.filter((n) => n.endsWith('.md')).map((n) => n.slice(0, -3))) };
     pd.tasks = parseTasks(pd.now);
     return pd;
   }
@@ -1318,6 +1325,9 @@
     if (s.notes?.length) {
       el('div', 'sub', 'Notes');
       for (const n of s.notes) { if (s.notes.length > 1) el('div', 'ntitle note', n.title); showNote(n.path, el('div', 'notebody note', 'Opening…')); }
+    } else if (pd?.organized?.has(s.id)) { // only the Done box's answers, organized
+      el('div', 'sub', 'Notes');
+      showNote(`state/notes/${s.id}.md`, el('div', 'notebody note', 'Opening…'));
     }
     if (s.similar?.length) {
       el('div', 'sub', 'Similar before');
@@ -1343,9 +1353,51 @@
     else box.previousElementSibling.textContent = 'Note: ' + title;
     showNote(path, box);
   }
+  // A note, organized by Claude when that copy is up to date (tools/organize in the planner repo): the organized
+  // version, its questions with a box to answer them, and the original words folded underneath. A note changed since
+  // shows as written until the organizer catches up (user, 2026-11-07).
+  const ORIGINAL = '<!-- your original words -->';
+  const normText = (t) => String(t || '').replace(/\r\n/g, '\n').trim();
   async function showNote(path, box) {
     box.textContent = 'Opening…';
-    try { renderNote((await getFile(path)).replace(/\r\n/g, '\n'), box); } catch (e) { box.textContent = e.message; }
+    const id = (path.match(/^state\/notes\/(.+)\.md$/) || [])[1];
+    try {
+      const raw = normText(await getFile(path));
+      const org = id && pd?.organized?.has(id) ? normText(await getFile(`state/notes/organized/${id}.md`)) : '';
+      const at = org.indexOf(ORIGINAL), original = at < 0 ? null : normText(org.slice(at + ORIGINAL.length));
+      if (original == null || !original.startsWith(raw)) {
+        renderNote(raw, box);
+        if (org && raw) { const w = document.createElement('p'); w.className = 'dim'; w.style.fontSize = '13px'; w.textContent = 'Changed since it was last organized: the organized version comes with the planner’s next update.'; box.prepend(w); }
+        return;
+      }
+      let body = org.slice(0, at);
+      const made = (body.match(/^organized:: (.*)$/m) || [])[1] || '';
+      body = body.replace(/^# .*$/m, '').replace(/^organized:: .*$/m, '');
+      // the questions, with a box to answer them
+      const qm = body.match(/^## Questions for you\s*\n([\s\S]*?)(?=^## |$(?![\s\S]))/m);
+      const questions = qm ? qm[1].split('\n').map((l) => l.replace(/^\s*-\s+/, '').trim()).filter(Boolean) : [];
+      if (qm) body = body.replace(qm[0], '');
+      box.textContent = '';
+      const tag = document.createElement('p'); tag.className = 'dim'; tag.style.cssText = 'font-size:12.5px;margin:4px 0 0';
+      tag.textContent = `Organized by Claude and checked against your words${made ? ` (${made.split(' · ')[0]})` : ''}. Your original words are below.`;
+      box.appendChild(tag);
+      if (questions.length) {
+        const q = document.createElement('div'); q.className = 'qbox';
+        const h = document.createElement('h4'); h.textContent = 'Questions for you'; q.appendChild(h);
+        const ul = document.createElement('ul'); for (const x of questions) { const li = document.createElement('li'); li.textContent = x; ul.appendChild(li); } q.appendChild(ul);
+        if (raw) { // answers go into the note itself, and the note is organized again with them
+          const ta = document.createElement('textarea'); ta.rows = 3; ta.placeholder = 'Your answers (it will be organized again with them)'; q.appendChild(ta);
+          const b = document.createElement('button'); b.className = 'btn small primary'; b.textContent = 'Send answers'; b.style.marginTop = '8px';
+          b.onclick = () => { const t = clip(ta.value); if (!t) { ta.focus(); return; } send([`notes: ${id} | Answers to the organizer's questions | ${t}`], 'your answers'); ta.value = ''; b.textContent = 'Sent ✓'; b.disabled = true; };
+          q.appendChild(b);
+        }
+        box.appendChild(q);
+      }
+      const main = document.createElement('div'); renderNote(body, main); box.appendChild(main);
+      const det = document.createElement('details'); det.className = 'orig';
+      const sum = document.createElement('summary'); sum.textContent = 'Your original words'; det.appendChild(sum);
+      const ob = document.createElement('div'); renderNote(original, ob); det.appendChild(ob); box.appendChild(det);
+    } catch (e) { box.textContent = e.message; }
   }
   // a note file as headings and bullet points (indented bullets nest); "# title" is the step's own name, so it is left out
   function renderNote(md, box) {

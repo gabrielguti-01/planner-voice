@@ -1442,7 +1442,7 @@
   // "solution"): what came out of it, the reasoning, and whether it leads to anything (yes: the next steps, which
   // become steps of the same project that this one unlocks; no: it's settled). All optional. ---
   // several lines (points) become one line "A; B; C"
-  const clip = (t) => (t || '').split(/\n+/).map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean).join('; ').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
+  const clip = (t) => (t || '').split(/\n+/).map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean).reduce((a, l) => (!a ? l : /[.!?;:]$/.test(a) ? `${a} ${l}` : `${a}; ${l}`), '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
   const solLine = (verb, ids, sol, bec) => [`${verb}: ${ids.join(', ')}`, clip(sol) && `solution ${clip(sol)}`, clip(bec) && `because ${clip(bec)}`].filter(Boolean).join(' | ');
   /** Resolves to { solution, because } (Save), {} (Skip), or null (Cancel). mode 'done' or 'solved'. */
   function askSolution(title, mode = 'done', pre = {}, waiting = []) {

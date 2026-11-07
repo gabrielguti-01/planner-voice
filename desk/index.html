@@ -108,6 +108,10 @@
   .seg button { border: none; background: none; padding: 7px 18px; border-radius: 999px; color: var(--dim); }
   .seg button.on { background: var(--active); color: var(--brass-hi); box-shadow: inset 0 0 0 1px var(--hair); }
   .pgrid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; align-items: start; }
+  .pgrid.reasoning { grid-template-columns: minmax(0, 1fr); }
+  .pgrid.reasoning #pDetail { display: none; }
+  #pReason { padding: 20px 24px; }
+  .verifybtn { background: #3a2a16; border-color: #e8862a; color: #f5b46a; }
   @media (max-width: 1100px) { .pgrid { grid-template-columns: 1fr; } }
   .flowwrap { overflow: hidden; padding: 18px 22px 24px; }
   .tldlg { border: 1px solid var(--hair); border-radius: 16px; background: var(--bg); color: var(--ink); padding: 0; width: calc(100vw - 32px); max-width: none; height: calc(100vh - 32px); max-height: none; overflow-x: hidden; overflow-y: auto; }
@@ -305,9 +309,10 @@
         <div class="pgrid">
           <div style="min-width:0;display:flex;flex-direction:column;gap:18px">
             <div id="pFlow" style="display:flex;flex-direction:column;gap:18px"></div>
+            <div id="pReason" class="panel pad hidden"></div>
             <div id="pGraph" class="panel hidden">
               <svg id="graphSvg" role="img" aria-label="This project's brain: its goal, its areas and their steps"></svg>
-              <div class="legend"><span><i style="background:var(--brass-hi)"></i>Goal</span><span><i style="background:var(--jade)"></i>Area</span><span><i style="background:var(--brass)"></i>Ready now</span><span><i style="border:1.5px solid var(--lock)"></i>Locked</span><span><i style="background:var(--moss)"></i>Done</span><span><i style="background:var(--moss);border:1.5px solid var(--rain)"></i>Solved in another project</span><span><i style="background:var(--rain);border-radius:2px"></i>Note</span><span>Arrow: finish this to unlock that · dotted: similar before · drag dots to move them</span></div>
+              <div class="legend"><span><i style="background:var(--brass-hi)"></i>Goal</span><span><i style="background:var(--jade)"></i>Area</span><span><i style="background:var(--brass)"></i>Ready now</span><span><i style="border:1.5px solid var(--lock)"></i>Locked</span><span><i style="background:var(--moss)"></i>Done</span><span><i style="background:var(--moss);border:1.5px solid var(--rain)"></i>Solved in another project</span><span><i style="background:var(--rain);border-radius:2px"></i>Note</span><span>Arrow: finish this to unlock that · dotted: similar before · drag dots to move them</span><span id="brainVerify" class="hidden" style="margin-left:auto"></span></div>
             </div>
           </div>
           <aside class="panel dpanel" id="pDetail" aria-live="polite"></aside>
@@ -330,6 +335,11 @@
           <p class="dim" style="margin-top:0">Same connection as the phone view: if you've connected the phone view in this browser, there's nothing to do here.</p>
           <div class="field"><label for="repo">Planner repository</label><input id="repo" type="text" placeholder="owner/repository" autocomplete="off"></div>
           <div class="field"><label for="token">GitHub token</label><input id="token" type="password" placeholder="paste it yourself; it stays in this browser" autocomplete="off"></div>
+          <h3 style="font:500 20px var(--serif);margin:22px 0 4px">Talk it through (Claude)</h3>
+          <p class="dim" style="margin:0 0 10px">When you mark a project step done, you can talk: Claude organizes what came out of it, the reasoning and the next steps, and asks about anything unclear. It runs through your own helper on Vercel, which holds the API key; this browser only keeps the helper's address and password.</p>
+          <div class="field"><label for="helperUrl">Helper address</label><input id="helperUrl" type="url" placeholder="https://your-helper.vercel.app" autocomplete="off"></div>
+          <div class="field"><label for="helperPass">Helper password</label><input id="helperPass" type="password" placeholder="the same PLANNER_PASS you set on Vercel" autocomplete="off"></div>
+          <div class="row" style="margin:-4px 0 14px"><button class="btn small" id="makePass" type="button">Make a password</button><span class="dim" id="makePassNote" style="font-size:13px"></span></div>
           <button class="btn primary small" id="saveSettings">Save and connect</button>
         </div></div>
       </section>
@@ -356,6 +366,7 @@
 </dialog>
 
 <script src="../speech.js?v=20261029a"></script>
+<script src="../reason.js?v=20261107a"></script>
 <script>
 (() => {
   'use strict';
@@ -631,7 +642,10 @@
   // A file that isn't there (404) is read as empty: steps then sit under "Unsorted" and finished ones come from history.
   let curProject = store.get('deskProject'), pv = store.get('deskPV', 'flow'), sel = null, model = null, pd = null, showAllLocked = false;
   if (!['flow', 'brain', 'list'].includes(pv)) pv = pv === 'graph' ? 'brain' : 'flow';
+  const mockFiles = new Map(); // test copies only: files "written" by the page
+  if (MOCK) globalThis.__mockFiles = mockFiles;
   async function getFile(path) {
+    if (MOCK && mockFiles.has(path)) return mockFiles.get(path);
     if (MOCK) { const r = await fetch('/' + (new URLSearchParams(location.search).get('mockroot') || '') + path, { cache: 'no-store' }); return r.ok ? r.text() : ''; } // test copies only
     const r = await api(path);
     if (r.status === 404) return '';
@@ -640,9 +654,26 @@
   }
   const optional = (path) => getFile(path).catch(() => ''); // newer files: their absence never stops the page
   async function listDir(path) {
-    if (MOCK) return (globalThis.__MOCK_DIRS || {})[path] || [];
+    if (MOCK) return [...new Set([...((globalThis.__MOCK_DIRS || {})[path] || []), ...[...mockFiles.keys()].filter((k) => k.startsWith(path + '/') && !k.slice(path.length + 1).includes('/')).map((k) => k.slice(path.length + 1))])];
     const r = await api(path); if (!r.ok) return [];
     const j = await r.json(); return Array.isArray(j) ? j.filter((f) => f.type === 'file').map((f) => f.name) : [];
+  }
+  // write or remove one file in the planner repository (the reasoning records)
+  async function putFile(path, text, message) {
+    if (MOCK) { mockFiles.set(path, text); return; }
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const g = await api(path); const sha = g.ok ? (await g.json()).sha : undefined;
+      const w = await api(path, { method: 'PUT', body: JSON.stringify({ message, content: b64encode(text), ...(sha ? { sha } : {}) }) });
+      if (w.ok) return;
+      if (w.status !== 409 && w.status !== 422 && w.status < 500) throw new Error(`GitHub answered ${w.status}.`);
+    }
+    throw new Error('GitHub kept refusing the save');
+  }
+  async function deleteFile(path, message) {
+    if (MOCK) { mockFiles.delete(path); return; }
+    const g = await api(path); if (g.status === 404) return; if (!g.ok) throw new Error(`GitHub answered ${g.status}.`);
+    const w = await api(path, { method: 'DELETE', body: JSON.stringify({ message, sha: (await g.json()).sha }) });
+    if (!w.ok && w.status !== 404) throw new Error(`GitHub answered ${w.status}.`);
   }
   const fieldsOf = (text) => { const f = {}; const rest = text.replace(/\[([\w-]+):: ([^\]]*)\]/g, (_, k, v) => { f[k] = v.trim(); return ''; }).trim(); return { f, rest }; };
   const idList = (v) => (v || '').split(/[,\s]+/).map((x) => x.trim()).filter((x) => x && x !== '-');
@@ -680,14 +711,15 @@
   }
   async function planData(force) {
     if (pd && !force && Date.now() - pd.at < 120e3) return pd;
-    const [now, goals, histNames, notes, library, areas, solved, defs, organized] = await Promise.all([getFile('state/now.md'), getFile('definitions/goals.md'), listDir('state/history'), listDir('state/notes'), listDir('state/library'),
-      optional('definitions/areas.md'), optional('state/solved.md'), optional('definitions/projects.md'), listDir('state/notes/organized')]);
+    const [now, goals, histNames, notes, library, areas, solved, defs, organized, pend, reasoned] = await Promise.all([getFile('state/now.md'), getFile('definitions/goals.md'), listDir('state/history'), listDir('state/notes'), listDir('state/library'),
+      optional('definitions/areas.md'), optional('state/solved.md'), optional('definitions/projects.md'), listDir('state/notes/organized'), listDir('reasoning/pending'), listDir('reasoning/done')]);
     const months = histNames.filter((n) => /^\d{4}-\d{2}\.md$/.test(n)).sort().slice(-4);
     const hist = (await Promise.all(months.map((n) => getFile('state/history/' + n)))).join('\n');
     const nl = (s) => s.replace(/\r\n/g, '\n');
     pd = { at: Date.now(), now: nl(now), goals: nl(goals), hist: nl(hist), notes: notes.map((n) => 'state/notes/' + n), library: library.map((n) => 'state/library/' + n),
       areas: parseAreas(nl(areas)), solved: parseSolved(nl(solved)), hasSolved: !!solved.trim(), projs: parseProjDefs(nl(defs)),
-      organized: new Set(organized.filter((n) => n.endsWith('.md')).map((n) => n.slice(0, -3))) };
+      organized: new Set(organized.filter((n) => n.endsWith('.md')).map((n) => n.slice(0, -3))),
+      pending: new Set(pend.filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -5))), reasoned: new Set(reasoned.filter((n) => n.endsWith('.json')).map((n) => n.slice(0, -5))) };
     pd.tasks = parseTasks(pd.now);
     return pd;
   }
@@ -784,7 +816,10 @@
     for (const b of document.querySelectorAll('[data-pv]')) b.classList.toggle('on', b.dataset.pv === pv);
     $('pFlow').classList.toggle('hidden', pv === 'brain');
     $('pGraph').classList.toggle('hidden', pv !== 'brain');
+    if (reasonOpen) { $('pFlow').classList.add('hidden'); $('pGraph').classList.add('hidden'); return; } // the talk-it-through screen is in the chart's place
     if (pv === 'brain') drawBrain(m); else { stopGraph(); (pv === 'flow' ? drawFlow : drawList)(m); }
+    const bv = $('brainVerify'), vbb = pv === 'brain' ? verifyButton(m) : null;
+    bv.replaceChildren(...(vbb ? [vbb] : [])); bv.classList.toggle('hidden', !vbb);
     if ($('tlDlg').open) drawTimeline(m, $('tlBody'));
     drawDetail();
     if (sel && pv !== 'brain') document.querySelector(`.tcard[data-id="${CSS.escape(sel)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -1076,6 +1111,7 @@
         f.textContent = ['Ready', aff && `do first: affects ${aff}`, s.who && whoWords(s.who), c.kind === 'quick' && 'quick'].filter(Boolean).join(' · ');
       }
       b.appendChild(f);
+      if (pd?.pending?.has(s.id)) { const v = document.createElement('span'); v.className = 'vdot'; v.title = 'Its reasoning still needs checking'; b.appendChild(v); }
       flow.appendChild(b);
     }
     fitChart(wrap, flow, width, height);
@@ -1098,7 +1134,8 @@
       } else sure('Reorganize the flow chart? Finished columns fold away except the last one; nothing new is added.', () => { const s = foldFrom(F, st.start, st.end); Object.assign(st, { start: s, quick: null, said: '' }); saveFlow(m, st); drawProjectPage(); });
     }
     reset();
-    bar.append(info, ctl);
+    const vb = verifyButton(m);
+    bar.append(...(vb ? [vb] : []), info, ctl);
     panel.appendChild(bar);
   }
 
@@ -1122,6 +1159,8 @@
     });
     if (!ready.length) ol.innerHTML = '<li class="dim">Nothing here: every step is on the flow chart.</li>';
     box.appendChild(panel);
+    const vb = verifyButton(m);
+    if (vb) { const vp = document.createElement('section'); vp.className = 'panel'; const pad = document.createElement('div'); pad.className = 'pad row'; pad.append(vb, Object.assign(document.createElement('span'), { className: 'dim', textContent: 'Finished steps whose reasoning still needs checking.' })); vp.appendChild(pad); box.appendChild(vp); }
     if (waiting.length) {
       const wp = document.createElement('section'); wp.className = 'panel';
       wp.innerHTML = '<div class="pad"><div class="kicker">Waiting on something outside this project</div><ul class="list plist"></ul></div>';
@@ -1340,9 +1379,17 @@
         b.onclick = () => (x.project === m.key ? select(x.id) : openProject(nameFor(x.project), x.id));
       }
     }
+    if (pd?.reasoned?.has(s.id) && !pd?.pending?.has(s.id)) {
+      el('div', 'sub', 'Train of thought');
+      const tb = el('div', 'notebody note', 'Opening…');
+      Reason.load(s.id, 'done').then((r) => { tb.textContent = ''; if (r?.understanding) Reason.drawBullets(tb, r.understanding, null, () => {}, { stepsTitle: 'New steps it added' }); else tb.textContent = 'Not found.'; }).catch((e) => { tb.textContent = e.message; });
+      const ob = el('button', 'btn small', 'Open as a flowchart'); ob.style.marginTop = '8px'; ob.onclick = () => openTrain(s);
+    }
+    if (pd?.pending?.has(s.id)) { const w = el('p', 'dim', 'Its reasoning still needs checking (orange dot).'); w.style.margin = '14px 0 0'; }
     if (s.state === 'locked') { const w = before.filter((b) => !['done', 'saved'].includes(b.state)); el('p', 'dim', `Locked until you finish: ${w.map((b) => b.title).join(', ')}.`).style.margin = '16px 0 0'; }
     const row = el('div', 'row'); row.style.marginTop = '18px';
     if (s.state === 'ready') { const b = document.createElement('button'); b.className = 'btn primary small'; b.textContent = 'Mark done'; b.onclick = () => markDone(s); row.appendChild(b); }
+    if (pd?.pending?.has(s.id)) { const b = document.createElement('button'); b.className = 'btn small verifybtn'; b.textContent = 'Verify now'; b.onclick = () => openVerify(model, s.id); row.appendChild(b); }
     if (s.state === 'done' && s.solved) { const b = document.createElement('button'); b.className = 'btn small'; b.textContent = s.f.solution || s.f.because ? 'Change what came out of it' : 'Add what came out of it'; b.onclick = () => addSolution(s); row.appendChild(b); }
     const back = document.createElement('button'); back.className = 'btn small'; back.textContent = 'Close'; back.onclick = () => select(null); row.appendChild(back);
   }
@@ -1438,6 +1485,63 @@
     if (!box.childNodes.length) box.textContent = '(empty)';
   }
 
+  // --- Talk it through (reason.js): Claude organizes what the user says about a finished step ---
+  let reasonOpen = false;
+  async function waitForPlanner() { // the planner runs on GitHub (2 to 4 minutes); refresh when it has caught up
+    const before = next?.made;
+    for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 15e3)); try { if (parseNext(await getNext()).made !== before) break; } catch {} }
+    if (!busy && !reasonOpen) refresh();
+  }
+  const Reason = PlannerReason.create({
+    helper: () => ({ url: store.get('helperUrl'), pass: store.get('helperPass') }),
+    getFile, putFile, deleteFile, listDir,
+    send: async (lines, text) => {
+      await appendInbox(lines);
+      for (const l of lines) { const m = l.match(/^done: ([^|]+)/); if (m) m[1].split(',').forEach((x) => isDoneLocally.add(x.trim())); }
+      status(`Saved: ${text}. The planner updates in 2 to 4 minutes.`);
+      waitForPlanner();
+    },
+    mockThink: MOCK && globalThis.__MOCK_THINK ? (b) => globalThis.__MOCK_THINK(b) : null,
+  });
+  function showReason(on) {
+    reasonOpen = on;
+    document.querySelector('#v-project .pgrid').classList.toggle('reasoning', on);
+    $('pReason').classList.toggle('hidden', !on);
+    $('pFlow').classList.toggle('hidden', on || pv === 'brain');
+    $('pGraph').classList.toggle('hidden', on || pv !== 'brain');
+    if (on) { stopGraph(); $('pReason').scrollIntoView({ block: 'start' }); }
+  }
+  const closeReason = (changed) => { showReason(false); if (pd) pd.at = 0; drawProjectPage(changed); };
+  async function recFor(s, m) {
+    let notes = '';
+    try { notes = (await Promise.all((s.notes || []).map((n) => getFile(n.path)))).join('\n\n').replace(/\r\n/g, '\n').slice(0, 12000); } catch {}
+    return { id: s.id, title: s.title, project: m.key, projectName: m.name, area: s.area || '', came_up: s.cameUp || '', notes, said: [], understanding: null, done: isDoneS(s), created: new Date().toISOString() };
+  }
+  async function openTalk(s) {
+    const m = model; if (!m) return;
+    showReason(true);
+    Reason.open($('pReason'), { mode: 'done', rec: await recFor(s, m), onClose: closeReason });
+  }
+  async function openTrain(s) {
+    const r = await Reason.load(s.id, 'done'); if (!r) return;
+    showReason(true);
+    Reason.open($('pReason'), { mode: 'view', rec: r, onClose: closeReason });
+  }
+  async function openVerify(m, firstId) {
+    const ids = own(m).filter((s) => pd?.pending?.has(s.id)).map((s) => s.id);
+    showReason(true);
+    $('pReason').textContent = 'Opening…';
+    const recs = (await Promise.all(ids.map((id) => Reason.load(id, 'pending')))).filter(Boolean);
+    Reason.open($('pReason'), { mode: 'verify', recs, rec: recs.find((r) => r.id === firstId) || null, onClose: closeReason });
+  }
+  // the "To verify" button: only once four or more finished steps wait (user, 2026-11-07)
+  function verifyButton(m) {
+    const n = own(m).filter((s) => pd?.pending?.has(s.id)).length;
+    if (n < 4) return null;
+    const b = document.createElement('button'); b.className = 'btn small verifybtn'; b.textContent = `● To verify (${n})`; b.title = 'Finished steps whose reasoning still needs checking';
+    b.onclick = () => openVerify(m); return b;
+  }
+
   // --- Done asks what came out of it (project steps; user, 2026-11-07: a talk or research has an outcome, not a
   // "solution"): what came out of it, the reasoning, and whether it leads to anything (yes: the next steps, which
   // become steps of the same project that this one unlocks; no: it's settled). All optional. ---
@@ -1482,6 +1586,12 @@
     });
   }
   async function doneWithSolution(ids, title, before, s) {
+    // from the home page, with the helper set up: open the step's project and talk it through there
+    if (!s && Reason.helperReady()) {
+      try { await planData(); } catch {}
+      const t = (pd?.tasks || []).find((x) => ids.includes(x.id) && x.f.project);
+      if (t) { curProject = nameFor(t.f.project); store.set('deskProject', curProject); sel = t.id; show('project'); await drawProjectPage(); const st = model?.byId.get(t.id); if (st) { openTalk(st); return; } }
+    }
     // from the home page there is no step object: find the step's project and area in the planner's own list
     const t = !s ? (pd?.tasks || []).find((x) => ids.includes(x.id) && x.f.project) : null;
     if (t) s = { id: t.id, area: t.f.area, f: t.f };
@@ -1499,6 +1609,7 @@
     send([solLine('solved', [s.id], r.solution, r.because)], `the solution for “${s.title}”`);
   }
   function markDone(s) {
+    if (Reason.helperReady() && (isProjectStep([s.id]) || s.f.project)) return openTalk(s);
     const go = () => { isDoneLocally.add(s.id); drawProjectPage(); };
     if (isProjectStep([s.id]) || s.f.project) return doneWithSolution([s.id], s.title, go, s);
     if (!confirm(`Mark “${s.title}” as done?`)) return;
@@ -1538,10 +1649,21 @@
 
   // ---------- settings: the same keys as the phone view ----------
   $('repo').value = store.get('repo');
+  $('helperUrl').value = store.get('helperUrl');
   $('saveSettings').onclick = () => {
     if ($('repo').value.trim()) store.set('repo', $('repo').value.trim());
     if ($('token').value.trim()) store.set('token', $('token').value.trim());
-    $('token').value = ''; show('home'); refresh();
+    store.set('helperUrl', $('helperUrl').value.trim());
+    if ($('helperPass').value.trim()) store.set('helperPass', $('helperPass').value.trim());
+    $('token').value = ''; $('helperPass').value = ''; show('home'); refresh();
+  };
+  // a long random password for the helper: put the same one on Vercel as PLANNER_PASS
+  $('makePass').onclick = async () => {
+    const a = new Uint8Array(24); crypto.getRandomValues(a);
+    const pw = Array.from(a, (x) => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[x % 57]).join('');
+    $('helperPass').value = pw; $('helperPass').type = 'text';
+    let copied = false; try { await navigator.clipboard.writeText(pw); copied = true; } catch {}
+    $('makePassNote').textContent = copied ? 'Copied. Paste it on Vercel as PLANNER_PASS, then press Save here.' : 'Copy it, paste it on Vercel as PLANNER_PASS, then press Save here.';
   };
 
   // ---------- loading ----------

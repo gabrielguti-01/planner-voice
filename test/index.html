@@ -254,6 +254,9 @@
     padding:15px 14px; min-height:50px; cursor:pointer; flex:1 1 auto; clip-path:polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut)); transition:background .2s, box-shadow .2s, color .2s; }
   button:hover { background:rgba(var(--p-rgb),.14); }
   button:active { transform:translateY(1px); }
+  /* the spelling check's "Keep my words" sits in the text line, small (a 44px tap target) */
+  #fixed, #fixNote { margin-top:6px; }
+  button.keepwords { min-height:44px; padding:8px 12px; margin:4px 0 0 0; flex:0 0 auto; vertical-align:middle; }
   button.primary { background:linear-gradient(180deg, var(--p), color-mix(in srgb, var(--p) 72%, #000)); color:var(--on-p); border-color:transparent; box-shadow:0 0 22px rgba(var(--p-rgb),.45); }
   button.listening { background:linear-gradient(180deg, #fff, var(--listen)); color:#04101c; box-shadow:0 0 26px rgba(var(--a-rgb),.6); }
   button:disabled { opacity:.45; cursor:default; }
@@ -692,6 +695,7 @@
   </section>
 
   <p class="meta" id="status"></p>
+  <p class="meta hidden" id="fixNote"></p>
  </div>
 
  <div id="drawer" class="hidden">
@@ -802,6 +806,12 @@
     <label for="token">GitHub access token (stays on this device)</label>
     <input id="token" type="password" autocomplete="off" placeholder="github_pat_…">
     <p class="meta">Create a fine-grained token on GitHub limited to this one repository, with Contents: read and write. It is stored only in this browser.</p>
+    <label for="helperUrl">Helper address (optional, for AI proofreading)</label>
+    <input id="helperUrl" type="url" placeholder="https://your-helper.vercel.app" autocomplete="off">
+    <label for="helperPass">Helper password (stays on this device)</label>
+    <input id="helperPass" type="password" autocomplete="off" placeholder="the PLANNER_PASS of your helper">
+    <label class="check"><input type="checkbox" id="proofread" checked> Also check my wording with AI (when the helper is set up)</label>
+    <p class="meta">Spelling is always checked on this device. Your own words are kept with every fix.</p>
     <label class="check"><input type="checkbox" id="autosend"> Save automatically when I'm sure what you said</label>
     <label class="check"><input type="checkbox" id="autospeak" checked> Read the next step aloud after saving</label>
     <div class="row" style="margin-top:14px"><button id="saveSettings">Save settings</button></div>
@@ -865,6 +875,8 @@
 </section>
 
 <script src="speech.js?v=20261029a"></script>
+<script src="spell/nspell.js?v=20261116a"></script>
+<script src="check.js?v=20261116a"></script>
 <script src="journal-link.js?v=20261102a"></script>
 <script>
 (() => {
@@ -1137,7 +1149,13 @@
   $('pair').onchange = () => { store.set('pair', $('pair').checked ? '1' : '0'); render(); };
   $('rate').value = store.get('rate', '1');
   $('rate').onchange = () => store.set('rate', $('rate').value);
+  $('helperUrl').value = store.get('helperUrl');
+  $('proofread').checked = store.get('proofread', 'on') !== 'off';
   $('saveSettings').onclick = () => {
+    store.set('helperUrl', $('helperUrl').value.trim());
+    if ($('helperPass').value.trim()) store.set('helperPass', $('helperPass').value.trim());
+    $('helperPass').value = '';
+    store.set('proofread', $('proofread').checked ? 'on' : 'off');
     store.set('repo', $('repo').value.trim()); store.set('token', $('token').value.trim());
     store.set('autosend', $('autosend').checked ? '1' : '0'); store.set('pair', $('pair').checked ? '1' : '0'); store.set('autospeak', $('autospeak').checked ? '1' : '0');
     $('settings').open = false; drawer(false); refresh();
@@ -1163,7 +1181,7 @@
     return b64decode((await r.json()).content);
   }
   async function appendInbox(lines) {
-    if (MOCK) { if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS)); mockInbox.push(...lines); return; }
+    if (MOCK) { if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS)); if (globalThis.__MOCK_SAVE_FAIL) throw new Error('demo: no connection'); mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox; return; }
     for (let attempt = 0; attempt < 6; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt)); // GitHub may still be settling the last write
       const r = await api('state/inbox.md');
@@ -1503,14 +1521,80 @@
     lastHandled = r;
     if (r.bare && smoothieAsk()) { askStep('done'); if ($('autospeak').checked) speak('Did you finish it, or put it in the fridge?'); return; }
     if (!r.commands.length) return act(r.action, r.minutes);
-    pendingLines = r.commands;
-    $('heard').textContent = r.changes && r.changes.length ? `“${text}” → understood as “${r.text}”` : `“${text}”`;
+    // the spelling check (check.js): the free text is fixed before it is sent, the user's words go along as "| said";
+    // anything going wrong sends the lines exactly as they were
+    const fix = spellFix(r.commands);
+    pendingLines = fix ? fix.lines : r.commands;
+    pendingFix = fix; sentFix = null; $('fixNote').classList.add('hidden');
+    heardText = r.changes && r.changes.length ? `“${text}” → understood as “${r.text}”` : `“${text}”`;
+    drawHeard();
     $('pendingTitle').textContent = r.uncertain ? "I'm not sure what that is. Save it as a note?" : 'I\'ll record';
-    $('lines').innerHTML = '';
-    for (const l of r.commands) { const c = document.createElement('code'); c.textContent = l; $('lines').appendChild(c); }
+    drawLines();
     $('pending').classList.remove('hidden');
     $('pending').dataset.action = r.action || '';
-    if ($('autosend').checked && !r.uncertain) send();
+    const go = $('autosend').checked && !r.uncertain;
+    // the optional AI proofread (the helper): at most 4 seconds, then step 1's result goes out
+    if (aiOn() && hasText(r.commands)) {
+      const mine = { orig: r.commands.slice() };
+      pendingAi = mine;
+      drawHeard('Checking the wording…');
+      PlannerCheck.proofreadLines(r.commands, { words: personalWords(), url: store.get('helperUrl'), pass: store.get('helperPass'), timeoutMs: 4000 })
+        .then((res) => { if (pendingAi !== mine || !pendingLines.length) return; const f = fixOf(r.commands, res); pendingFix = f; pendingLines = f ? f.lines : r.commands; })
+        .catch(() => {})
+        .finally(() => { if (pendingAi !== mine) return; pendingAi = null; drawHeard(); drawLines(); if (go && pendingLines.length) send(); });
+      return;
+    }
+    if (go) send();
+  }
+  // ---------- the spelling check: fixes shown in #heard, "Keep my words" puts the user's words back ----------
+  let pendingFix = null, sentFix = null, pendingAi = null, heardText = '';
+  const personalWords = () => { try { return PlannerSpeech.vocabFrom(next); } catch { return []; } };
+  const aiOn = () => store.get('proofread', 'on') !== 'off' && !!store.get('helperUrl') && !!store.get('helperPass') && !!globalThis.PlannerCheck;
+  const hasText = (lines) => { try { return lines.some((l) => { const p = PlannerCheck.parseLine(l); return p && !p.skip && p.fields.length; }); } catch { return false; } };
+  const fixOf = (orig, res) => (res.some((x) => x.changed) ? { orig: orig.slice(), lines: res.map((x) => x.line), results: res, changes: res.flatMap((x) => x.changes) } : null);
+  function spellFix(lines) {
+    try {
+      if (!globalThis.PlannerCheck || !PlannerCheck.ready()) return null;
+      return fixOf(lines, PlannerCheck.fixLines(lines, { words: personalWords() }));
+    } catch { return null; }
+  }
+  function drawLines() {
+    $('lines').innerHTML = '';
+    // the "| said …" part travels with the line but isn't shown: "Fixed: …" above says what changed
+    for (const l of pendingLines) { const c = document.createElement('code'); c.textContent = l.replace(/(?:\s*\|\s*said\b[^|]*)+$/i, ''); $('lines').appendChild(c); }
+  }
+  // "Fixed: specefically → specifically" next to "understood as …", with the button that keeps the user's words
+  function fixedLine(box, fix, note) {
+    box.textContent = '';
+    if (note) { box.append(note); return; }
+    if (!fix) return;
+    const s = document.createElement('span'); s.textContent = `Fixed: ${PlannerCheck.describe(fix.changes)} `; box.append(s);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'keepwords'; b.textContent = 'Keep my words'; b.onclick = keepMine; box.append(b);
+  }
+  function drawHeard(note = '') {
+    $('heard').textContent = heardText;
+    const f = document.createElement('div'); f.id = 'fixed'; fixedLine(f, pendingFix, note);
+    if (f.childNodes.length) $('heard').append(f);
+  }
+  function keepMine() {
+    if (pendingFix && pendingLines.length) { // not sent yet: the user's lines go instead
+      pendingLines = pendingFix.orig.slice(); pendingFix = null; pendingAi = null;
+      drawHeard(); drawLines(); $('heard').append(Object.assign(document.createElement('div'), { textContent: 'Your words will be saved as you wrote them.' }));
+      return;
+    }
+    const fx = sentFix;
+    if (!fx) return;
+    sentFix = null;
+    const ob = outbox(), changed = fx.results.map((r, i) => ({ r, i })).filter((x) => x.r.changed), at = changed.map((x) => ob.indexOf(fx.lines[x.i]));
+    if (!flushing && at.every((i) => i >= 0)) { // still waiting in the outbox: swap in the user's words
+      changed.forEach((x, k) => { ob[at[k]] = fx.orig[x.i]; });
+      setOutbox(ob);
+    } else { // already saved (or being saved): the planner puts the user's words back
+      const kw = PlannerCheck.keepWordsLines(fx.results);
+      if (kw.length) setOutbox([...outbox(), ...kw]);
+    }
+    flush();
+    $('fixNote').textContent = 'Keeping your words.';
   }
   const localNow = () => { const d = new Date(nyNow()), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
   // Recheck: asks the engine to recompute now. It records nothing and does not move the scheduled recheck.
@@ -1555,6 +1639,10 @@
   async function send() {
     const lines = pendingLines; pendingLines = [];
     if (!lines.length) return;
+    // the fixes just sent stay undoable ("Keep my words") under the status line
+    const fx = pendingFix && pendingFix.lines.join('\n') === lines.join('\n') ? pendingFix : null;
+    pendingFix = null; pendingAi = null; sentFix = fx;
+    if (fx) { fixedLine($('fixNote'), fx); $('fixNote').classList.remove('hidden'); }
     $('send').disabled = true;
     try {
       $('pending').classList.add('hidden');
@@ -1600,6 +1688,16 @@
   }
   $('send').onclick = send;
   if (!MOCK && outbox().length) setTimeout(() => flush(), 1500);
+  // the spelling check's dictionary (about 0.5 MB): fetched after the first paint and built while the phone is idle,
+  // so the first fix doesn't wait; until it is ready, lines go out as typed
+  let spellStarted = false;
+  const startSpell = () => {
+    if (spellStarted || !globalThis.PlannerCheck) return;
+    spellStarted = true;
+    PlannerCheck.fetchDictionary('').then(() => (window.requestIdleCallback || ((f) => setTimeout(f, 500)))(() => PlannerCheck.warm(), { timeout: 3000 })).catch(() => {});
+  };
+  requestAnimationFrame(() => setTimeout(startSpell, 0));
+  setTimeout(startSpell, 2000); // a page opened in the background gets no frames
   // ---------- the made smoothie: its time on screen, a spoken reminder while the app is open, and a phone alert ----------
   let smoothieTimer = 0;
   const atLocal = (s) => (s ? new Date(s.replace(' ', 'T')).getTime() : NaN);
@@ -1892,7 +1990,7 @@
     await send();
     lastHandled = null;
   };
-  $('cancel').onclick = () => { pendingLines = []; $('pending').classList.add('hidden'); };
+  $('cancel').onclick = () => { pendingLines = []; pendingFix = null; pendingAi = null; $('pending').classList.add('hidden'); };
   $('typedGo').onclick = () => { const v = $('typed').value.trim(); if (v) { $('typed').value = ''; handle(v); } };
   $('typed').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('typedGo').click(); });
 

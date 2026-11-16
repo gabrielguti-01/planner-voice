@@ -92,6 +92,12 @@
   .tell { display: flex; gap: 10px; }
   .tell input, .field input { flex: 1 1 auto; min-width: 0; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--btn-line); background: var(--side); }
   .lines code { display: block; font-size: 13px; color: var(--brass-hi); padding: 2px 0; }
+  /* the spelling check: fixes marked before Save, with Accept all and Keep mine */
+  .fixbox { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--hair); border-radius: 10px; background: var(--side); }
+  .fixbox .fixhead { color: var(--dim); font-size: 13px; margin-bottom: 6px; }
+  .fixbox .fixline { margin: 4px 0; line-height: 1.5; overflow-wrap: anywhere; }
+  .fixbox mark { background: rgba(224,160,80,.22); color: var(--brass-hi); border-radius: 3px; padding: 0 2px; }
+  .fixbox .row { margin-top: 10px; }
   .status { min-height: 20px; color: var(--dim); font-size: 14px; }
   .status.bad { color: var(--coral); }
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
@@ -288,7 +294,8 @@
             <div class="confirm hidden" id="tellBox">
               <p id="tellTitle">I'll record:</p>
               <div class="lines" id="tellLines"></div>
-              <div class="row" style="margin-top:10px"><button class="btn primary small" id="tellYes">Save</button><button class="btn small" id="tellNo">Cancel</button></div>
+              <div class="fixbox hidden" id="tellFix"></div>
+              <div class="row" style="margin-top:10px"><button class="btn primary small" id="tellYes">Save</button><button class="btn small hidden" id="tellMine">Keep mine</button><button class="btn small" id="tellNo">Cancel</button></div>
             </div>
           </div>
         </div>
@@ -341,6 +348,7 @@
           <div class="field"><label for="helperUrl">Helper address</label><input id="helperUrl" type="url" placeholder="https://your-helper.vercel.app" autocomplete="off"></div>
           <div class="field"><label for="helperPass">Helper password</label><input id="helperPass" type="password" placeholder="the same PLANNER_PASS you set on Vercel" autocomplete="off"></div>
           <div class="row" style="margin:-4px 0 14px"><button class="btn small" id="makePass" type="button">Make a password</button><span class="dim" id="makePassNote" style="font-size:13px"></span></div>
+          <label class="dim" style="display:flex;gap:8px;align-items:center;margin:0 0 14px"><input type="checkbox" id="proofread" checked> Also check my wording with AI through the helper (spelling is always checked here)</label>
           <button class="btn primary small" id="saveSettings">Save and connect</button>
         </div></div>
       </section>
@@ -362,12 +370,15 @@
       <p class="dim hidden" id="solWaiting" style="margin:8px 0 0"></p>
       <textarea id="solNext" class="hidden" rows="3" autocomplete="off" placeholder="One next step per line" style="margin-top:8px"></textarea>
     </div>
-    <div class="row"><button class="btn primary small" id="solSave">Save and mark done</button><button class="btn small" id="solSkip">Skip</button><button class="btn small" id="solCancel">Cancel</button></div>
+    <div class="fixbox hidden" id="solFix"></div>
+    <div class="row"><button class="btn primary small" id="solSave">Save and mark done</button><button class="btn small hidden" id="solMine">Keep mine</button><button class="btn small" id="solSkip">Skip</button><button class="btn small" id="solCancel">Cancel</button></div>
   </form>
 </dialog>
 
 <script src="../speech.js?v=20261029a"></script>
 <script src="../reason.js?v=20261107a"></script>
+<script src="../spell/nspell.js?v=20261116a"></script>
+<script src="../check.js?v=20261116a"></script>
 <script>
 (() => {
   'use strict';
@@ -1366,6 +1377,8 @@
       said('What came out of it', s.f.solution || 'Nothing written down yet.');
       if (s.f.because || s.f.solution) said('Reasoning', s.f.because || 'Not written down.');
       if (s.f.solution_was || s.f.because_was) said('Before that', [s.f.solution_was, s.f.because_was && `because ${s.f.because_was}`].filter(Boolean).join(', '));
+      // the user's own words, from before the spelling check fixed them (state/solved.md said_solution / said_because)
+      if (s.f.said_solution || s.f.said_because) said('Your words', [s.f.said_solution, s.f.said_because && `because ${s.f.said_because}`].filter(Boolean).join(', '));
     }
     if (s.f.note || s.note) el('p', 'dim', s.f.note || s.note).style.margin = '10px 0 0';
     const before = s.after.map((a) => m.byId.get(a)).filter(Boolean), unlocks = (m.kids.get(s.id) || []).map((k) => m.byId.get(k)).filter(Boolean);
@@ -1449,8 +1462,26 @@
         if (raw) { // answers go into the note itself, and the note is organized again with them
           const ta = document.createElement('textarea'); ta.rows = 3; ta.placeholder = 'Your answers (it will be organized again with them)'; q.appendChild(ta);
           const b = document.createElement('button'); b.className = 'btn small primary'; b.textContent = 'Send answers'; b.style.marginTop = '8px';
-          b.onclick = () => { const t = clip(ta.value); if (!t) { ta.focus(); return; } send([`notes: ${id} | Answers to the organizer's questions | ${t}`], 'your answers'); ta.value = ''; b.textContent = 'Sent ✓'; b.disabled = true; };
+          // the spelling check marks its fixes here first: Accept all or Keep mine
+          const fixBox = document.createElement('div'); fixBox.className = 'fixbox hidden';
+          const mine = document.createElement('button'); mine.className = 'btn small hidden'; mine.textContent = 'Keep mine'; mine.style.cssText = 'margin:8px 0 0 8px';
+          let fixed = null;
+          const sendIt = (lines) => { send(lines, 'your answers'); ta.value = ''; b.textContent = 'Sent ✓'; b.disabled = true; mine.classList.add('hidden'); fixBox.classList.add('hidden'); };
+          b.onclick = async () => {
+            if (fixed) return sendIt(fixed.lines);
+            const t = clip(ta.value); if (!t) { ta.focus(); return; }
+            const line = `notes: ${id} | Answers to the organizer's questions | ${t}`;
+            b.disabled = true;
+            fixed = await checkLines([line]);
+            b.disabled = false;
+            if (!fixed) return sendIt([line]);
+            drawFixes(fixBox, fixed); b.textContent = 'Accept all'; mine.classList.remove('hidden');
+          };
+          mine.onclick = () => { if (fixed) sendIt(fixed.orig); };
+          ta.addEventListener('input', () => { if (fixed) { fixed = null; b.textContent = 'Send answers'; mine.classList.add('hidden'); fixBox.classList.add('hidden'); } });
+          q.appendChild(fixBox);
           q.appendChild(b);
+          q.appendChild(mine);
         }
         box.appendChild(q);
       }
@@ -1564,14 +1595,50 @@
   // several lines (points) become one line "A; B; C"
   const clip = (t) => (t || '').split(/\n+/).map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean).reduce((a, l) => (!a ? l : /[.!?;:]$/.test(a) ? `${a} ${l}` : `${a}; ${l}`), '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
   const solLine = (verb, ids, sol, bec) => [`${verb}: ${ids.join(', ')}`, clip(sol) && `solution ${clip(sol)}`, clip(bec) && `because ${clip(bec)}`].filter(Boolean).join(' | ');
-  /** Resolves to { solution, because } (Save), {} (Skip), or null (Cancel). mode 'done' or 'solved'. */
-  function askSolution(title, mode = 'done', pre = {}, waiting = []) {
+  // ---------- the spelling check (check.js): fixes are marked before Save, with Accept all and Keep mine ----------
+  // personal words: the planner's own words on screen, every step title this view has loaded and the project names
+  const deskWords = () => { const out = []; try { out.push(...PlannerSpeech.vocabFrom(next)); } catch {} for (const t of pd?.tasks || []) out.push(t.text); for (const p of next?.projects || []) out.push(p.name); return out; };
+  const aiOn = () => store.get('proofread', 'on') !== 'off' && !!store.get('helperUrl') && !!store.get('helperPass');
+  /** The lines with their free text fixed: { lines, orig, results, changes }, or null when nothing changed or the check can't run. Never throws. */
+  async function checkLines(lines) {
+    try {
+      if (!globalThis.PlannerCheck || !PlannerCheck.ready()) return null;
+      const words = deskWords();
+      const res = aiOn() ? await PlannerCheck.proofreadLines(lines, { words, url: store.get('helperUrl'), pass: store.get('helperPass'), timeoutMs: 8000 }) : PlannerCheck.fixLines(lines, { words });
+      return res.some((x) => x.changed) ? { orig: lines.slice(), lines: res.map((x) => x.line), results: res, changes: res.flatMap((x) => x.changes) } : null;
+    } catch { return null; }
+  }
+  // the fixed text with the changed words marked (hover: what you wrote)
+  function marked(from, to) {
+    const A = from.split(/\s+/).filter(Boolean), B = to.split(/\s+/).filter(Boolean);
+    const L = Array.from({ length: A.length + 1 }, () => new Array(B.length + 1).fill(0));
+    for (let i = A.length - 1; i >= 0; i--) for (let j = B.length - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const p = document.createElement('p'); p.className = 'fixline';
+    let i = 0, j = 0, gone = [];
+    while (j < B.length) {
+      if (i < A.length && A[i] === B[j]) { p.append(`${B[j]} `); i++; j++; gone = []; }
+      else if (i < A.length && L[i + 1][j] >= L[i][j + 1]) gone.push(A[i++]);
+      else { const m = document.createElement('mark'); m.textContent = B[j]; if (gone.length) m.title = `You wrote: ${gone.join(' ')}`; p.append(m, ' '); j++; }
+    }
+    return p;
+  }
+  function drawFixes(box, fx) {
+    box.innerHTML = '';
+    const h = document.createElement('div'); h.className = 'fixhead'; h.textContent = `Fixed before saving: ${PlannerCheck.describe(fx.changes)}. Your words are kept with it.`; box.appendChild(h);
+    for (const r of fx.results) for (const f of r.changed ? r.fields : []) if (f.from !== f.to) box.appendChild(marked(f.from, f.to));
+    box.classList.remove('hidden');
+  }
+  /** Resolves to { solution, because, lines? } (Save), {} (Skip), or null (Cancel). mode 'done' or 'solved'. With compose(v) → lines,
+   *  Save checks the spelling first: fixes are marked in the dialog, then Accept all or Keep mine gives the lines to send. */
+  function askSolution(title, mode = 'done', pre = {}, waiting = [], compose = null) {
     const d = $('solDlg');
     $('solKicker').textContent = mode === 'done' ? 'Mark done' : 'What came out of it';
     $('solTitle').textContent = title;
     $('solHint').textContent = mode === 'done' ? 'All optional. They stay with the step, so you can look back on what came out of it and why.' : 'Both are optional; an earlier answer is kept too.';
     $('solWhat').value = pre.solution || ''; $('solWhy').value = pre.because || ''; $('solNext').value = '';
-    $('solSave').textContent = mode === 'done' ? 'Save and mark done' : 'Save';
+    const saveText = mode === 'done' ? 'Save and mark done' : 'Save';
+    $('solSave').textContent = saveText; $('solSave').disabled = false;
+    $('solFix').classList.add('hidden'); $('solMine').classList.add('hidden');
     $('solSkip').classList.toggle('hidden', mode !== 'done');
     $('solLeadsBox').classList.toggle('hidden', mode !== 'done');
     let leads = null;
@@ -1587,12 +1654,28 @@
     pick(null);
     return new Promise((res) => {
       const finish = (v) => { d.onclose = null; if (d.open) d.close(); res(v); };
-      $('solSave').onclick = (e) => {
+      let review = null; // { v, fx } while the fixes are shown
+      // typing again after the fixes were shown: they no longer match, so Save checks again
+      const unreview = () => { if (!review) return; review = null; $('solFix').classList.add('hidden'); $('solMine').classList.add('hidden'); $('solSave').textContent = saveText; };
+      for (const id of ['solWhat', 'solWhy', 'solNext']) $(id).oninput = unreview;
+      $('solLeadsYes').onclick = () => { unreview(); pick(true); }; $('solLeadsNo').onclick = () => { unreview(); pick(false); };
+      $('solMine').onclick = (e) => { e.preventDefault(); if (review) finish({ ...review.v, lines: review.fx.orig }); };
+      $('solSave').onclick = async (e) => {
         e.preventDefault();
+        if (review) return finish({ ...review.v, lines: review.fx.lines }); // Accept all
         const next = leads === true ? $('solNext').value.split(/\n+/).map((l) => clip(l.replace(/^\s*(\d+[.)]|[-*•])\s*/, ''))).filter(Boolean) : [];
         const v = { solution: $('solWhat').value, because: $('solWhy').value, next };
         if (mode !== 'done' && !clip(v.solution) && !clip(v.because)) { $('solWhat').focus(); return; }
-        finish(v);
+        if (!compose) return finish(v);
+        const lines = compose(v);
+        $('solSave').disabled = true; $('solSave').textContent = aiOn() ? 'Checking the wording…' : saveText;
+        const fx = await checkLines(lines);
+        $('solSave').disabled = false;
+        if (!fx) return finish({ ...v, lines });
+        review = { v, fx };
+        drawFixes($('solFix'), fx);
+        $('solSave').textContent = 'Accept all'; $('solMine').classList.remove('hidden');
+        $('solSave').focus();
       };
       $('solSkip').onclick = (e) => { e.preventDefault(); finish({}); };
       $('solCancel').onclick = (e) => { e.preventDefault(); finish(null); };
@@ -1612,17 +1695,18 @@
     const t = !s ? (pd?.tasks || []).find((x) => ids.includes(x.id) && x.f.project) : null;
     if (t) s = { id: t.id, area: t.f.area, f: t.f };
     const waiting = s && model ? (model.kids.get(s.id) || []).map((k) => model.byId.get(k)).filter((x) => x && !['done', 'saved'].includes(x.state)).map((x) => x.title) : [];
-    const r = await askSolution(title, 'done', {}, waiting);
+    // the next steps first, each waiting on this one, so the brain keeps "this led to that"
+    const addsOf = (v) => (v.next || []).map((t) => [`add: ${t}`, s?.f.project && `project ${s.f.project}`, s?.area && `area ${s.area}`, `after ${ids[0]}`, `why came out of: ${clip(title)}`].filter(Boolean).join(' | '));
+    const r = await askSolution(title, 'done', {}, waiting, (v) => [...addsOf(v), solLine('done', ids, v.solution, v.because)]);
     if (!r) return;
     if (before) before();
-    // the next steps first, each waiting on this one, so the brain keeps "this led to that"
-    const adds = (r.next || []).map((t) => [`add: ${t}`, s?.f.project && `project ${s.f.project}`, s?.area && `area ${s.area}`, `after ${ids[0]}`, `why came out of: ${clip(title)}`].filter(Boolean).join(' | '));
-    send([...adds, solLine('done', ids, r.solution, r.because)], `“${title}” done${adds.length ? `; ${adds.length} next step${adds.length === 1 ? '' : 's'} added` : ''}`);
+    const adds = addsOf(r);
+    send(r.lines || [...adds, solLine('done', ids, r.solution, r.because)], `“${title}” done${adds.length ? `; ${adds.length} next step${adds.length === 1 ? '' : 's'} added` : ''}`);
   }
   async function addSolution(s) {
-    const r = await askSolution(s.title, 'solved', { solution: s.f.solution, because: s.f.because });
+    const r = await askSolution(s.title, 'solved', { solution: s.f.solution, because: s.f.because }, [], (v) => [solLine('solved', [s.id], v.solution, v.because)]);
     if (!r || (!clip(r.solution) && !clip(r.because))) return;
-    send([solLine('solved', [s.id], r.solution, r.because)], `the solution for “${s.title}”`);
+    send(r.lines || [solLine('solved', [s.id], r.solution, r.because)], `the solution for “${s.title}”`);
   }
   function markDone(s) {
     if (Reason.helperReady() && (isProjectStep([s.id]) || s.f.project)) return openTalk(s);
@@ -1633,19 +1717,37 @@
   }
 
   // ---------- typing to the planner (the same reading as the phone's typed box) ----------
-  function tell() {
+  let tellFix = null, tellSeq = 0;
+  async function tell() {
     const v = $('tell').value.trim(); if (!v || !next) return;
     const r = toCommands(v, today(), { tasks: next.tasks || [], step: next.step || '', vocab: null });
     if (!r.commands.length) { status('That reads as a question, not a report. Try the phone view for questions.'); return; }
-    tellLines = r.commands;
+    const seq = ++tellSeq;
+    tellLines = r.commands; tellFix = null;
+    // the "| said …" part travels with the line but isn't shown: the marked fixes below say what changed
+    const draw = (lines) => { $('tellLines').innerHTML = ''; for (const l of lines) { const c = document.createElement('code'); c.textContent = l.replace(/(?:\s*\|\s*said\b[^|]*)+$/i, ''); $('tellLines').appendChild(c); } };
     $('tellTitle').textContent = r.uncertain ? "I'm not sure what that is. Save it as a note?" : "I'll record:";
-    $('tellLines').innerHTML = ''; for (const l of r.commands) { const c = document.createElement('code'); c.textContent = l; $('tellLines').appendChild(c); }
+    draw(r.commands);
+    $('tellFix').classList.add('hidden'); $('tellMine').classList.add('hidden'); $('tellYes').textContent = 'Save';
     $('tellBox').classList.remove('hidden');
+    // the spelling check: the fixes are marked here before Save (Accept all) or Keep mine
+    if (aiOn()) { $('tellYes').disabled = true; $('tellYes').textContent = 'Checking the wording…'; }
+    const fx = await checkLines(r.commands);
+    if (seq !== tellSeq) return; // typed again meanwhile
+    $('tellYes').disabled = false; $('tellYes').textContent = 'Save';
+    if (!fx) return;
+    tellFix = fx; tellLines = fx.lines; draw(fx.lines);
+    drawFixes($('tellFix'), fx);
+    $('tellYes').textContent = 'Accept all'; $('tellMine').classList.remove('hidden');
   }
   $('tellGo').onclick = tell;
   $('tell').addEventListener('keydown', (e) => { if (e.key === 'Enter') tell(); });
-  $('tellNo').onclick = () => { tellLines = []; $('tellBox').classList.add('hidden'); };
-  $('tellYes').onclick = () => { const l = tellLines; tellLines = []; $('tellBox').classList.add('hidden'); $('tell').value = ''; send(l, l.join('; ')); };
+  // typing again after the fixes were shown: the box no longer matches what was typed, so it closes until Send
+  $('tell').addEventListener('input', () => { if (tellLines.length) tellDone(); });
+  const tellDone = () => { tellLines = []; tellFix = null; tellSeq++; $('tellBox').classList.add('hidden'); $('tellFix').classList.add('hidden'); $('tellMine').classList.add('hidden'); };
+  $('tellNo').onclick = tellDone;
+  $('tellYes').onclick = () => { const l = tellLines; tellDone(); $('tell').value = ''; send(l, l.join('; ')); };
+  $('tellMine').onclick = () => { const l = tellFix ? tellFix.orig : tellLines; tellDone(); $('tell').value = ''; send(l, l.join('; ')); };
 
   // ---------- side bar and views ----------
   function show(view) {
@@ -1669,10 +1771,12 @@
   // ---------- settings: the same keys as the phone view ----------
   $('repo').value = store.get('repo');
   $('helperUrl').value = store.get('helperUrl');
+  $('proofread').checked = store.get('proofread', 'on') !== 'off';
   $('saveSettings').onclick = () => {
     if ($('repo').value.trim()) store.set('repo', $('repo').value.trim());
     if ($('token').value.trim()) store.set('token', $('token').value.trim());
     store.set('helperUrl', $('helperUrl').value.trim());
+    store.set('proofread', $('proofread').checked ? 'on' : 'off');
     if ($('helperPass').value.trim()) store.set('helperPass', $('helperPass').value.trim());
     $('token').value = ''; $('helperPass').value = ''; show('home'); refresh();
   };
@@ -1705,6 +1809,15 @@
   const idle = () => !busy && !confirmKind && !$('solDlg').open;
   setInterval(() => { if (idle()) refresh(); }, 5 * 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && idle()) refresh(); });
+  // the spelling check's dictionary (about 0.5 MB): fetched after the first paint, built while the page is idle
+  let spellStarted = false;
+  const startSpell = () => {
+    if (spellStarted || !globalThis.PlannerCheck) return;
+    spellStarted = true;
+    PlannerCheck.fetchDictionary('../').then(() => (window.requestIdleCallback || ((f) => setTimeout(f, 500)))(() => PlannerCheck.warm(), { timeout: 3000 })).catch(() => {});
+  };
+  requestAnimationFrame(() => setTimeout(startSpell, 0));
+  setTimeout(startSpell, 2000); // a page opened in the background gets no frames
   if (peers) peers.onmessage = () => { if (idle() && !reasonOpen) refresh(); };
 })();
 </script>

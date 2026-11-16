@@ -265,17 +265,18 @@
       if (t.k !== 'w') continue;
       if (/^i(?:['’](?:m|ve|ll|d))?$/.test(t.t)) { t.t = 'I' + t.t.slice(1); continue; }
       const before = prevWord(i);
-      const abbr = before && before.t === '.' && (() => { for (let j = toks.indexOf(before) - 1; j >= 0; j--) { if (toks[j].k === 's') continue; return toks[j].k === 'w' && ABBR.has(lc(toks[j].t)); } return false; })();
+      const abbr = before && before.t === '.' && (() => { for (let j = toks.indexOf(before) - 1; j >= 0; j--) { if (toks[j].k === 's') continue; return toks[j].k === 'w' && TITLES.has(lc(toks[j].t)); } return false; })();
       const sentenceStart = !before || (before.k === 'p' && /[.!?]/.test(before.t) && !abbr);
-      if (isCap(t.t) && TYPOS[lc(t.t)]) { t.t = withCase(t.t, TYPOS[lc(t.t)]); continue; } // "Teh" anywhere
       if (/[A-Z]/.test(t.t) && !(sentenceStart && isCap(t.t))) continue; // a name (or an ACRONYM): left alone
       const to = wordFix(t.t, o);
       if (to) t.t = to;
     }
+    // "a a" is a slip, but not "an A a week" (a grade) or "vitamin a a day" (a label)
+    const doubleA = (i) => { const p = prevWord(i), b = toks[i + 2]; const start = !p || (p.k === 'p' && /[.!?]/.test(p.t)); return b.t === 'a' && (toks[i].t === 'a' || start) && !(p && p.k === 'w' && LABELS.has(lc(p.t))); };
     // 2. doubled words ("the the")
     for (let i = 0; i + 2 < toks.length; i++) {
       const a = toks[i], s = toks[i + 1], b = toks[i + 2];
-      if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t)) && (a.t.length > 1 || a.t === b.t)) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
+      if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t)) && (a.t.length > 1 || doubleA(i))) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
     }
     // 3. a / an before a lowercase word (not a letter used as a label: "option a or b", "vitamin a and zinc")
     for (let i = 0; i + 2 < toks.length; i++) {
@@ -441,7 +442,8 @@
       .replace(/c(?=[eiy])/g, 's').replace(/[cq]/g, 'k').replace(/z/g, 's').replace(/gh/g, '').replace(/wh/g, 'w').replace(/v/g, 'f');
     return (s[0] + s.slice(1).replace(/[aeiouyhw]/g, '')).replace(/(.)\1+/g, '$1');
   }
-  const ABBR = new Set('dr mr mrs ms prof jr sr mt ft'.split(' '));
+  const ABBR = new Set('dr mr mrs ms st jr sr vs etc prof mt ft no'.split(' ')); // the guard: a capital after these may be a name
+  const TITLES = new Set('dr mr mrs ms prof jr sr mt ft'.split(' ')); // step 1: only these keep a capital from starting a sentence
   const englishWord = (w) => { try { return ready() && (speller().correct(w) || COMMON.has(w)); } catch { return false; } };
   /** The protected pieces of a text, in order: what an AI answer must keep exactly. */
   function protectedOf(text, words) {
@@ -496,9 +498,10 @@
         const x = bare(fa[i]), y = bare(fb[i]);
         if (x === y || x.replace(/'/g, '') === y.replace(/'/g, '')) continue; // an apostrophe: "programs" → "program's"
         // a word form added to the same word is a grammar fix: "go" → "goes", "bag" → "bags", "use" → "used"
-        const inflection = (a, b) => b.startsWith(a) && (/^(?:s|es|ed|ing|'s)$/.test(b.slice(a.length)) || (a.endsWith('e') && b.slice(a.length) === 'd'));
+        const inflection = (a, b) => a.length >= 2 && b.startsWith(a) && (/^(?:s|ing|'s)$/.test(b.slice(a.length)) || (/(?:s|x|z|ch|sh|o)$/.test(a) && b.slice(a.length) === 'es'));
         if (inflection(x, y) && real(y)) continue;
         if (real(x) && !real(y)) return { ok: false, reason: `"${fa[i]}" is a real word and "${fb[i]}" isn't` };
+        if (!real(x) && words.has(x)) return { ok: false, reason: `"${fa[i]}" is one of your own names or words` }; // "sean" stays
         if (!real(x) && !COMMON.has(y)) return { ok: false, reason: `"${fa[i]}" isn't an English word (a name?), and "${fb[i]}" isn't an everyday one` };
         if (real(x) && real(y) && soundKey(x) !== soundKey(y) && !CONFUSABLE.has(`${x}:${y}`)) return { ok: false, reason: `"${fa[i]}" → "${fb[i]}" changes one real word into another` };
       }

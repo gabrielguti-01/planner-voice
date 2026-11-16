@@ -58,6 +58,8 @@
   const NAMES = new Set('monday tuesday wednesday thursday friday saturday sunday january february march april may june july august september october november december english spanish american christmas thanksgiving easter halloween'.split(' '));
   // A field with Spanish in it is left as written.
   const SPANISH = new Set('de la el los las que para por con del una uno unos unas y es se al lo su sus como pero esta este son hay muy también ya donde cuando porque sin sobre entre hasta desde nos les'.split(' '));
+  // Words after which "a" is a letter used as a label ("option a", "vitamin a", "plan a"), not the article.
+  const LABELS = new Set('option options vitamin vitamins plan plans grade grades type types part parts step steps group groups size sizes class row column item point letter exhibit appendix section level tier version'.split(' '));
   // A doubled word that is almost always a slip ("the the"); "had had" and "that that" can be right, so they aren't here.
   const NO_DOUBLE = new Set('the a an to of in on at for and or it my me we you with this be by from as so but not your our their his her its'.split(' '));
 
@@ -89,7 +91,7 @@
   // ---------- protected text: never changed, byte for byte ----------
   const PROTECT = [
     /`[^`]*`/g, // code
-    /"[^"]*"|“[^”]*”/g, // quoted text
+    /"[^"]*"|“[^”]*”|(?<![\w’'])['‘][^'’\n]{1,120}['’](?![\w’'])/g, // quoted text ("…", “…”, '…', ‘…’; not apostrophes)
     /\bhttps?:\/\/\S+|\bwww\.\S+/gi, // web addresses
     /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, // email addresses
     /(?:^|\s)@\s*(?:yesterday|\d{4}-\d{2}-\d{2}(?: \d{1,2}:\d{2})?|\d{1,2}:\d{2})/gi, // "@ yesterday", "@ 14:30"
@@ -177,7 +179,7 @@
     if (s.correct(word) || s.correct(low) || knownForm(low, s)) return null;
     // a day or month typed in lowercase gets its capital
     if (word === low && NAMES.has(low)) return cap(low);
-    const split = splitFix(low, s, o);
+    const split = word === low ? splitFix(low, s, o) : null; // a capitalized word isn't split (it may be a name)
     if (split) return withCase(word, split);
     if (compound(low, s)) return null; // "chipset", "hardcoded": two real words written as one
     if (low.length <= 3 || low.length > 20 || o.budget.n <= 0) return null; // 3-letter words: only the TYPOS list
@@ -186,7 +188,10 @@
     const cands = [...new Set(s.suggest(low))]
       .filter((c) => /^[a-z]+(?:'[a-z]+)?$/.test(c) && c !== low && (!c.includes("'") || c.replace("'", '') === low))
       // the first letter may be mistyped ("gigured") but not added or dropped ("iphone" isn't "phone"); a short word only becomes an everyday one
-      .filter((c) => (c[0] === low[0] || c.length === low.length) && (low.length > 5 || known(c)))
+      .filter((c) => (c[0] === low[0] || (c.length === low.length && word === low && known(c))) && (low.length > 5 || known(c)))
+      // a capitalized word (the start of a sentence) may be a new name: it only becomes an everyday word ("Desing" → "Design",
+      // never "Kalena" → "Galena")
+      .filter((c) => word === low || known(c))
       .map((c) => { const raw = cost(low, c); return { c, raw, v: raw + (c[0] !== low[0] ? 1 : 0) }; })
       .sort((a, b) => a.v - b.v || (a.c < b.c ? -1 : 1));
     // a word far from every real word is a name or a brand, not a slip: short words need one near slip, middle ones one edit
@@ -266,10 +271,12 @@
       const a = toks[i], s = toks[i + 1], b = toks[i + 2];
       if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t))) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
     }
-    // 3. a / an before a lowercase word
+    // 3. a / an before a lowercase word (not a letter used as a label: "option a or b", "vitamin a and zinc")
     for (let i = 0; i + 2 < toks.length; i++) {
       const a = toks[i], s = toks[i + 1], b = toks[i + 2];
       if (a.k !== 'w' || !/^(?:a|an)$/.test(a.t) || s.k !== 's' || b.k !== 'w' || !/^[a-z]/.test(b.t) || b.t.length < 2 || o.words.has(lc(b.t))) continue;
+      const before = prevWord(i);
+      if (/^(?:or|and|nor|to|through|thru|plus|minus)$/i.test(b.t) || (before && before.k === 'w' && LABELS.has(lc(before.t)))) continue;
       const want = SOUND(b.t) ? 'an' : 'a';
       if (lc(a.t) !== want) a.t = a.t[0] === 'A' ? cap(want) : want;
     }
@@ -298,8 +305,8 @@
   // ---------- inbox lines ----------
   const LINE = /^(\s*(?:-\s*)?(?:\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}\]\s*)?)([A-Za-z][A-Za-z ]*?)(\s*:\s*)([\s\S]*)$/;
   // verbs whose free text is checked; everything else (groceries, laundry, food counts, settings…) is left alone
-  const MAIN = { add: 'title', event: 'title', workflow: 'title', note: 'note', write: 'text' };
-  const LAST = { notes: 'text', library: 'text' }; // "<task> | <heading> | <text>": only the text
+  const MAIN = { add: 'title', event: 'title', workflow: 'title', note: 'note' };
+  const LAST = { notes: 3, library: 3, write: 2 }; // "<task> | <heading> | <text>", "[<topic> |] <text>": only the text, never the names
   const TARGET = new Set(['set', 'done', 'did', 'solved', 'skip', 'cancel', 'started', 'start', 'planned', 'plan', 'waiting', 'blocked', 'move', 'remove', 'undo', 'first']);
   const OPTS = { why: 'why', note: 'note', because: 'because', solution: 'solution', left: 'left' };
   const SET_OPTS = { title: 'title', goal: 'goal' };
@@ -313,15 +320,17 @@
     const opt = (s) => s.match(/^(\s*)([a-z_]+)(\s+)([\s\S]*?)(\s*)$/i);
     const out = { prefix: m[1] + m[2] + m[3], verb, segs, fields: [] };
     if (!(verb in MAIN) && !(verb in LAST) && !TARGET.has(verb)) { out.skip = 'verb'; return out; }
+    if (verb in LAST && segs.length > LAST[verb]) { out.skip = 'bars'; return out; } // a "|" inside the text: left as written
     for (const s of segs.slice(1)) {
       const o = opt(s);
       if (o && o[2].toLowerCase() === 'said') { out.skip = 'said'; return out; } // already carries the user's words
-      if (o && o[2].toLowerCase() === 'source' && /^email\b/i.test(o[4])) { out.skip = 'email'; return out; } // Lodestar's lines stay as written
+      if (o && o[2].toLowerCase() === 'source' && /^email\b/i.test(o[4])) { out.skip = 'email'; return out; } // lines from the email app stay as written
     }
     const field = (seg, key, kind, lead, body, trail, tag) => out.fields.push({ seg, key, field: kind, lead, body, trail, tag });
     const whole = (i, kind, tag) => { const x = segs[i].match(/^(\s*)([\s\S]*?)(\s*)$/); if (x[2]) field(i, null, kind, x[1], x[2], x[3], tag); };
     if (verb in MAIN) whole(0, MAIN[verb], '');
-    if (verb in LAST) { if (segs.length >= 3) whole(segs.length - 1, LAST[verb], ''); return out; }
+    // the text of notes:, library: and write: is always tagged "said text:" (the text itself may begin with "said")
+    if (verb in LAST) { if (segs.length === LAST[verb] || (verb === 'write' && segs.length === 1)) whole(segs.length - 1, 'text', 'text'); return out; }
     for (let i = 1; i < segs.length; i++) {
       const o = opt(segs[i]);
       if (!o) continue;
@@ -406,20 +415,49 @@
     flush();
     return out;
   }
+  // what an AI answer may never change: dates (day and month names, today…), number words, negations, names
+  const DATE_WORDS = new Set([...NAMES].filter((w) => !['english', 'spanish', 'american', 'christmas', 'thanksgiving', 'easter', 'halloween'].includes(w))
+    .concat('today tomorrow tonight yesterday weekend weekday noon midnight mon tue tues wed thu thur thurs fri sat sun jan feb mar apr jun jul aug sep sept oct nov dec'.split(' ')));
+  const NUMBER_WORDS = new Set(`zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen
+    nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand million billion first second third fourth fifth sixth seventh eighth
+    ninth tenth last once twice half double triple dozen both all none every each`.split(/\s+/));
+  const isNegation = (w) => /^(?:not|no|never|none|nothing|nobody|nowhere|neither|nor|without|cannot|nope|aint|(?:do|does|did|is|are|was|were|ca|wo|would|should|could|has|have|had|must|need)nt)$/.test(w) || /n['’]t$/.test(w); // "dont" too
+  // pairs that are commonly mixed up, so an AI may swap one real word for the other
+  const CONFUSABLE = new Set(`affect:effect advice:advise breath:breathe lose:loose quiet:quite quit:quite then:than were:where we're:were your:you're
+    its:it's there:their their:they're there:they're whose:who's to:too weather:whether principal:principle stationary:stationery
+    complement:compliment desert:dessert personal:personnel lead:led past:passed peak:peek brake:break bare:bear site:sight cite:site
+    planar:planner of:off a:an accept:accepts`.split(/\s+/).flatMap((p) => { const [a, b] = p.split(':'); return [`${a}:${b}`, `${b}:${a}`]; }));
+  // the same consonant skeleton, first letter kept: "planar"/"planner", "there"/"their" (speech.js uses the same idea)
+  function soundKey(w) {
+    let s = lc(w).replace(/[^a-z]/g, '');
+    if (!s) return s;
+    s = s.replace(/^(kn|gn|pn|wr)/, (m) => m[1]).replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/ch/g, 'k').replace(/sh/g, 's').replace(/th/g, 't')
+      .replace(/c(?=[eiy])/g, 's').replace(/[cq]/g, 'k').replace(/z/g, 's').replace(/gh/g, '').replace(/wh/g, 'w').replace(/v/g, 'f');
+    return (s[0] + s.slice(1).replace(/[aeiouyhw]/g, '')).replace(/(.)\1+/g, '$1');
+  }
   /** The protected pieces of a text, in order: what an AI answer must keep exactly. */
   function protectedOf(text, words) {
     const W = words instanceof Set ? words : wordsOf(words || []);
     const out = [];
+    let start = true; // at the start of a sentence a capital is just the sentence's
     for (const t of tokenize(String(text))) {
-      if (t.k === 'x') out.push(t.t);
-      else if (t.k === 'w' && W.has(lc(t.t)) && /[A-Z]/.test(t.t)) out.push(t.t); // a personal name as written
+      if (t.k === 'x') { out.push(t.t); start = false; continue; }
+      if (t.k === 'p') { if (/[.!?]/.test(t.t)) start = true; continue; }
+      if (t.k !== 'w') continue;
+      const w = lc(t.t);
+      if (DATE_WORDS.has(w) || NUMBER_WORDS.has(w)) out.push(w); // a date or a number (its capital may change)
+      else if (isNegation(w)) out.push('¬'); // a negation, added or taken away, flips the meaning
+      else if (/[A-Z]/.test(t.t) && (!start || W.has(w))) out.push(t.t); // a name: capitalized mid-sentence, or a personal word
+      start = false;
     }
     return out;
   }
   /**
-   * The deterministic guard on an AI proofread (step 2). Rejects the answer when a protected piece differs, the word
-   * count moves by more than 1, a changed word is more than 2 edits away (other than a/an, I, capitals or
-   * punctuation), or too many words change. Returns { ok, reason }.
+   * The deterministic guard on an AI proofread (step 2). Rejects the answer when a protected piece (link, ID, number,
+   * date, quote, name, number word, day or month, negation) differs, the word count moves by more than 1, a changed
+   * word is more than 2 edits away, a real word becomes another real word that neither sounds the same nor is a known
+   * mix-up ("hire" → "fire", "sell" → "send"), or too many words change. Capitals, punctuation, apostrophes, a/an and
+   * I are free. Returns { ok, reason }.
    */
   const GUARD = { max_share: 0.15, min_words: 2 };
   function guard(before, after, opts = {}) {
@@ -427,17 +465,23 @@
     if (typeof after !== 'string' || !after.trim()) return { ok: false, reason: 'empty answer' };
     if (/[|\n]/.test(after) && !/[|\n]/.test(before)) return { ok: false, reason: 'a "|" or a line break was added' };
     const pa = protectedOf(before, words), pb = protectedOf(after, words);
-    if (pa.length !== pb.length || pa.some((x, i) => x !== pb[i])) return { ok: false, reason: 'a name, ID, number, date, link or quote changed' };
+    if (pa.length !== pb.length || pa.some((x, i) => x !== pb[i])) return { ok: false, reason: 'a name, ID, number, date, link, quote or "not" changed' };
     const na = wordsIn(before).length, nb = wordsIn(after).length;
     if (Math.abs(na - nb) > 1) return { ok: false, reason: 'the word count changed by more than 1' };
+    const real = (w) => { try { return ready() ? speller().correct(w) || speller().correct(lc(w)) : true; } catch { return true; } };
     let changed = 0;
     for (const d of diffWords(before, after)) {
       const fa = wordsIn(d.from), fb = wordsIn(d.to);
       const same = (x, y) => bare(x) === bare(y); // only case or punctuation differs
       if (fa.length === fb.length && fa.every((x, i) => same(x, fb[i]))) continue;
-      const pair = (x, y) => (/^(?:a|an)$/.test(bare(x)) && /^(?:a|an)$/.test(bare(y))) || (bare(x) === 'i' && bare(y) === 'i');
-      if (fa.length === 1 && fb.length === 1 && pair(fa[0], fb[0])) continue;
+      const free = (x, y) => (/^(?:a|an)$/.test(bare(x)) && /^(?:a|an)$/.test(bare(y))) || (bare(x) === 'i' && bare(y) === 'i');
+      if (fa.length === 1 && fb.length === 1 && free(fa[0], fb[0])) continue;
       if (lev(fa.map(bare).join(''), fb.map(bare).join('')) > 2 * Math.max(1, Math.min(fa.length, fb.length))) return { ok: false, reason: `"${d.from}" → "${d.to}" is more than a small fix` };
+      if (fa.length === fb.length) for (let i = 0; i < fa.length; i++) {
+        const x = bare(fa[i]), y = bare(fb[i]);
+        if (x === y || x.replace(/'/g, '') === y.replace(/'/g, '')) continue; // an apostrophe: "programs" → "program's"
+        if (real(x) && real(y) && soundKey(x) !== soundKey(y) && !CONFUSABLE.has(`${x}:${y}`)) return { ok: false, reason: `"${fa[i]}" → "${fb[i]}" changes one real word into another` };
+      }
       changed += Math.max(fa.length, fb.length, 1);
     }
     if (changed > Math.max(GUARD.min_words, Math.ceil(na * GUARD.max_share))) return { ok: false, reason: 'too many words changed' };
@@ -494,7 +538,8 @@
     try {
       const call = fetchFn(String(opts.url).replace(/\/+$/, '') + '/api/proofread', {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-planner-pass': opts.pass },
-        body: JSON.stringify({ texts: parts.map((p) => p.text), words: [...W].slice(0, 300) }), signal: ctl ? ctl.signal : undefined,
+        // only the personal words these texts use (fewer tokens, and nothing else of the list leaves the device)
+        body: JSON.stringify({ texts: parts.map((p) => p.text), words: [...new Set(parts.flatMap((p) => (p.text.match(/\p{L}+(?:['’]\p{L}+)*/gu) || []).map(lc)))].filter((w) => W.has(w)).slice(0, 300) }), signal: ctl ? ctl.signal : undefined,
       }).then((r) => (r.ok ? r.json() : null));
       const late = new Promise((res) => { timer = setTimeout(() => { if (ctl) ctl.abort(); res(null); }, opts.timeoutMs || 4000); });
       answer = await Promise.race([call, late]);

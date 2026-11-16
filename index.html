@@ -1543,7 +1543,7 @@ try {
     const go = $('autosend').checked && !r.uncertain;
     // the optional AI proofread (the helper): at most 4 seconds, then step 1's result goes out
     if (aiOn() && hasText(r.commands)) {
-      const mine = { orig: r.commands.slice() };
+      const mine = { orig: r.commands.slice(), go };
       pendingAi = mine;
       drawHeard('Checking the wording…');
       PlannerCheck.proofreadLines(r.commands, { words: personalWords(), url: store.get('helperUrl'), pass: store.get('helperPass'), timeoutMs: 4000 })
@@ -1586,8 +1586,10 @@ try {
   }
   function keepMine() {
     if (pendingFix && pendingLines.length) { // not sent yet: the user's lines go instead
+      const autoSave = !!(pendingAi && pendingAi.go); // it was waiting for the AI and would have saved by itself
       pendingLines = pendingFix.orig.slice(); pendingFix = null; pendingAi = null;
       drawHeard(); drawLines(); $('heard').append(Object.assign(document.createElement('div'), { textContent: 'Your words will be saved as you wrote them.' }));
+      if (autoSave) send();
       return;
     }
     const fx = sentFix;
@@ -1651,6 +1653,7 @@ try {
     const fx = pendingFix && pendingFix.lines.join('\n') === lines.join('\n') ? pendingFix : null;
     pendingFix = null; pendingAi = null; sentFix = fx;
     if (fx) { fixedLine($('fixNote'), fx); $('fixNote').classList.remove('hidden'); }
+    else $('fixNote').classList.add('hidden'); // an older "Keep my words" no longer applies
     $('send').disabled = true;
     try {
       $('pending').classList.add('hidden');
@@ -1698,6 +1701,8 @@ try {
   if (!MOCK && outbox().length) setTimeout(() => flush(), 1500);
   // the spelling check's dictionary (about 0.5 MB): fetched after the first paint and built while the phone is idle,
   // so the first fix doesn't wait; until it is ready, lines go out as typed
+  // a line waiting for the AI (up to 4 s) that would save by itself is saved now if the page is put away, so it's never lost
+  document.addEventListener('visibilitychange', () => { if (document.hidden && pendingAi && pendingAi.go && pendingLines.length) { pendingAi = null; send(); } });
   let spellStarted = false;
   const startSpell = () => {
     if (spellStarted || !globalThis.PlannerCheck) return;

@@ -267,6 +267,7 @@
       const before = prevWord(i);
       const abbr = before && before.t === '.' && (() => { for (let j = toks.indexOf(before) - 1; j >= 0; j--) { if (toks[j].k === 's') continue; return toks[j].k === 'w' && ABBR.has(lc(toks[j].t)); } return false; })();
       const sentenceStart = !before || (before.k === 'p' && /[.!?]/.test(before.t) && !abbr);
+      if (isCap(t.t) && TYPOS[lc(t.t)]) { t.t = withCase(t.t, TYPOS[lc(t.t)]); continue; } // "Teh" anywhere
       if (/[A-Z]/.test(t.t) && !(sentenceStart && isCap(t.t))) continue; // a name (or an ACRONYM): left alone
       const to = wordFix(t.t, o);
       if (to) t.t = to;
@@ -274,7 +275,7 @@
     // 2. doubled words ("the the")
     for (let i = 0; i + 2 < toks.length; i++) {
       const a = toks[i], s = toks[i + 1], b = toks[i + 2];
-      if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t)) && !/^[A-Z]$/.test(b.t)) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
+      if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t)) && (a.t.length > 1 || a.t === b.t)) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
     }
     // 3. a / an before a lowercase word (not a letter used as a label: "option a or b", "vitamin a and zinc")
     for (let i = 0; i + 2 < toks.length; i++) {
@@ -440,7 +441,7 @@
       .replace(/c(?=[eiy])/g, 's').replace(/[cq]/g, 'k').replace(/z/g, 's').replace(/gh/g, '').replace(/wh/g, 'w').replace(/v/g, 'f');
     return (s[0] + s.slice(1).replace(/[aeiouyhw]/g, '')).replace(/(.)\1+/g, '$1');
   }
-  const ABBR = new Set('dr mr mrs ms st jr sr vs etc prof mt ft no'.split(' '));
+  const ABBR = new Set('dr mr mrs ms prof jr sr mt ft'.split(' '));
   const englishWord = (w) => { try { return ready() && (speller().correct(w) || COMMON.has(w)); } catch { return false; } };
   /** The protected pieces of a text, in order: what an AI answer must keep exactly. */
   function protectedOf(text, words) {
@@ -494,11 +495,11 @@
       if (fa.length === fb.length) for (let i = 0; i < fa.length; i++) {
         const x = bare(fa[i]), y = bare(fb[i]);
         if (x === y || x.replace(/'/g, '') === y.replace(/'/g, '')) continue; // an apostrophe: "programs" → "program's"
-        // a word form added to the same word is a grammar fix: "go" → "goes", "bag" → "bags", "broke" → "broken"
-        const inflection = (a, b) => b.startsWith(a) && /^(?:s|es|ed|d|ing|en|n|'s)$/.test(b.slice(a.length));
-        if (inflection(x, y)) continue;
+        // a word form added to the same word is a grammar fix: "go" → "goes", "bag" → "bags", "use" → "used"
+        const inflection = (a, b) => b.startsWith(a) && (/^(?:s|es|ed|ing|'s)$/.test(b.slice(a.length)) || (a.endsWith('e') && b.slice(a.length) === 'd'));
+        if (inflection(x, y) && real(y)) continue;
         if (real(x) && !real(y)) return { ok: false, reason: `"${fa[i]}" is a real word and "${fb[i]}" isn't` };
-        if (!real(x) && !COMMON.has(y) && !(real(y) && x[0] === y[0] && soundKey(x) === soundKey(y))) return { ok: false, reason: `"${fa[i]}" isn't an English word (a name?), and "${fb[i]}" isn't an everyday one` };
+        if (!real(x) && !COMMON.has(y)) return { ok: false, reason: `"${fa[i]}" isn't an English word (a name?), and "${fb[i]}" isn't an everyday one` };
         if (real(x) && real(y) && soundKey(x) !== soundKey(y) && !CONFUSABLE.has(`${x}:${y}`)) return { ok: false, reason: `"${fa[i]}" → "${fb[i]}" changes one real word into another` };
       }
       changed += Math.max(fa.length, fb.length, 1);

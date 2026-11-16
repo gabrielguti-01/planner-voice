@@ -12,7 +12,9 @@
   // ---------- word lists (written for this checker) ----------
   // Everyday English words: used only to choose between equally close fixes and to accept a missing space
   // ("forthis" → "for this", not "fort his").
-  const COMMON = new Set(`a about above across act action actually add added address after again against age ago agree ahead all allow
+  const COMMON = new Set(`confirm exercise schedule review submit organize calendar appointment beginning dentist doctor homework
+    assignment practice receipt believe receive separate definitely address finally necessary recommend restaurant tomorrow
+    a about above across act action actually add added address after again against age ago agree ahead all allow
     almost alone along already also always am amount an and another answer any anyone anything anyway app apps are area around as ask
     asked at away back bad bank be because become been before began begin behind being believe below best better between big bill bit
     black board body book both box break bring brought build built business but buy by call called came can card care case cat cause
@@ -61,7 +63,7 @@
   // Words after which "a" is a letter used as a label ("option a", "vitamin a", "plan a"), not the article.
   const LABELS = new Set('option options vitamin vitamins plan plans grade grades type types part parts step steps group groups size sizes class row column item point letter exhibit appendix section level tier version'.split(' '));
   // A doubled word that is almost always a slip ("the the"); "had had" and "that that" can be right, so they aren't here.
-  const NO_DOUBLE = new Set('the an to of in on at for and or it my me we you with this be by from as so but not your our their his her its'.split(' '));
+  const NO_DOUBLE = new Set('the a an to of in on at for and or it my me we you with this be by from as so but not your our their his her its'.split(' '));
 
   // ---------- the dictionary (nspell + Hunspell en_US from dictionary-en; see spell/SOURCE.md) ----------
   const NODE = typeof module !== 'undefined' && !!module.exports && typeof require === 'function' && typeof __dirname === 'string';
@@ -179,7 +181,8 @@
     if (s.correct(word) || s.correct(low) || knownForm(low, s)) return null;
     // a day or month typed in lowercase gets its capital
     if (word === low && NAMES.has(low)) return cap(low);
-    const split = splitFix(low, s, o); // only two everyday words, one of them short: "Whatcame" → "What came"
+    // only two everyday words, one of them short: "Whatcame" → "What came"; a capitalized word (maybe a name) needs 6+ letters
+    const split = word === low || low.length >= 6 ? splitFix(low, s, o) : null;
     if (split) return withCase(word, split);
     if (compound(low, s)) return null; // "chipset", "hardcoded": two real words written as one
     if (low.length <= 3 || low.length > 20 || o.budget.n <= 0) return null; // 3-letter words: only the TYPOS list
@@ -193,7 +196,7 @@
       // a capitalized word (the start of a sentence) may be a new name: it keeps its first letter and only takes a near slip
       // (a swap or a doubled letter, "Scheudle", "Reveiw"), one close edit in a longer word ("Comfirm", "Excercise"), or an
       // everyday word ("Desing" → "Design"); never "Kalena" → "Galena" or "Maira" → "Mara"
-      .filter((x) => word === low || (x.c[0] === low[0] && (x.raw <= 0.5 || (low.length >= 7 && x.raw <= 1) || (known(x.c) && low.length >= 5 && x.raw <= 1))))
+      .filter((x) => word === low || (x.c[0] === low[0] && (x.raw <= 0.5 || (known(x.c) && low.length >= 5 && x.raw <= 1))))
       .sort((a, b) => a.v - b.v || (a.c < b.c ? -1 : 1));
     // a word far from every real word is a name or a brand, not a slip: short words need one near slip, middle ones one edit
     if (!cands.length || cands[0].raw > (low.length <= 5 ? 0.8 : low.length <= 8 ? 1.3 : 2)) return null;
@@ -262,7 +265,8 @@
       if (t.k !== 'w') continue;
       if (/^i(?:['’](?:m|ve|ll|d))?$/.test(t.t)) { t.t = 'I' + t.t.slice(1); continue; }
       const before = prevWord(i);
-      const sentenceStart = !before || (before.k === 'p' && /[.!?]/.test(before.t));
+      const abbr = before && before.t === '.' && (() => { for (let j = toks.indexOf(before) - 1; j >= 0; j--) { if (toks[j].k === 's') continue; return toks[j].k === 'w' && ABBR.has(lc(toks[j].t)); } return false; })();
+      const sentenceStart = !before || (before.k === 'p' && /[.!?]/.test(before.t) && !abbr);
       if (/[A-Z]/.test(t.t) && !(sentenceStart && isCap(t.t))) continue; // a name (or an ACRONYM): left alone
       const to = wordFix(t.t, o);
       if (to) t.t = to;
@@ -490,11 +494,11 @@
       if (fa.length === fb.length) for (let i = 0; i < fa.length; i++) {
         const x = bare(fa[i]), y = bare(fb[i]);
         if (x === y || x.replace(/'/g, '') === y.replace(/'/g, '')) continue; // an apostrophe: "programs" → "program's"
-        // a word form of the same word is a grammar fix: "go" → "goes", "bag" → "bags", "broke" → "broken"
+        // a word form added to the same word is a grammar fix: "go" → "goes", "bag" → "bags", "broke" → "broken"
         const inflection = (a, b) => b.startsWith(a) && /^(?:s|es|ed|d|ing|en|n|'s)$/.test(b.slice(a.length));
-        if (inflection(x, y) || inflection(y, x)) continue;
+        if (inflection(x, y)) continue;
         if (real(x) && !real(y)) return { ok: false, reason: `"${fa[i]}" is a real word and "${fb[i]}" isn't` };
-        if (!real(x) && !COMMON.has(y)) return { ok: false, reason: `"${fa[i]}" isn't an English word (a name?), and "${fb[i]}" isn't an everyday one` };
+        if (!real(x) && !COMMON.has(y) && !(real(y) && x[0] === y[0] && soundKey(x) === soundKey(y))) return { ok: false, reason: `"${fa[i]}" isn't an English word (a name?), and "${fb[i]}" isn't an everyday one` };
         if (real(x) && real(y) && soundKey(x) !== soundKey(y) && !CONFUSABLE.has(`${x}:${y}`)) return { ok: false, reason: `"${fa[i]}" → "${fb[i]}" changes one real word into another` };
       }
       changed += Math.max(fa.length, fb.length, 1);

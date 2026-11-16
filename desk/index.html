@@ -63,6 +63,7 @@
   .btn:disabled { opacity: .5; cursor: default; }
 
   .proj-head { width: 100%; background: none; border: none; text-align: left; padding: 22px 26px; display: flex; align-items: center; gap: 18px; }
+  a.proj-head, a.proj-head:hover { color: inherit; text-decoration: none; cursor: pointer; }
   .proj-head .name { font: 30px var(--serif); margin-top: 6px; }
   .proj-head .k { color: var(--jade); }
   .chev { transition: transform .2s; }
@@ -264,7 +265,7 @@
           </section>
 
           <section class="panel hidden" id="projPanel" aria-label="Today's project">
-            <button class="proj-head" id="projHead">
+            <a class="proj-head" id="projHead" href="./">
               <div style="flex:1 1 auto;min-width:0">
                 <div class="kicker k">Today's project</div>
                 <div class="name" id="projName"></div>
@@ -272,7 +273,7 @@
               </div>
               <span style="color:var(--brass);font-weight:600;white-space:nowrap">Open the project</span>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-            </button>
+            </a>
             <div class="steps hidden" id="projSteps"></div>
           </section>
           <div id="projMore" style="display:flex;flex-direction:column;gap:22px"></div>
@@ -374,6 +375,17 @@
   const MOCK = new URLSearchParams(location.search).has('mock');
   // the same saved settings as the phone view (same site, same keys)
   const store = { get: (k, d = '') => { try { return localStorage.getItem('planner.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('planner.' + k, v); } catch {} } };
+  // what this window shows (the view, the open project, where Back goes) lives in the window itself, so two project
+  // windows and the next-action window don't pull each other around; localStorage only remembers it for a fresh open
+  const tab = { get: (k, d = '') => { try { return sessionStorage.getItem('desk.' + k) ?? d; } catch { return d; } }, set: (k, v) => { try { sessionStorage.setItem('desk.' + k, v); } catch {} } };
+  const urlProject = new URLSearchParams(location.search).get('project') || '';
+  // a project card is a real link (./?project=<name>): right-click → "Open link in new tab/window", Ctrl/middle click work;
+  // a plain click opens the project in this window (user, 2026-11-16)
+  const projectHref = (name) => { const u = new URL(location.href); u.hash = ''; u.searchParams.set('project', name); return u.pathname + u.search; };
+  function projectLink(a, name) { a.href = projectHref(name); a.onclick = (e) => { if (e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; e.preventDefault(); openProject(name); }; }
+  // the other windows of this page refresh once this one has saved and the planner has caught up
+  const peers = (() => { try { return new BroadcastChannel('planner-desk'); } catch { return null; } })();
+  const tellPeers = () => { try { peers?.postMessage('refresh'); } catch {} };
   const { parseNext, toCommands } = PlannerSpeech;
   let next = null, raw = '', projOpen = false, confirmKind = null, tellLines = [];
 
@@ -433,6 +445,7 @@
         try { caughtUp = parseNext(await getNext()).made !== before; } catch {}
       }
       await refresh();
+      if (caughtUp) tellPeers();
       status(caughtUp ? `Saved: ${doneText}.` : `Saved: ${doneText}. The planner hasn't caught up yet; this page will refresh on its own.`);
     } catch (e) { status(`Not saved: ${e.message}`, true); }
     finally { busy = false; setButtons(true); }
@@ -477,17 +490,17 @@
     // today's project
     const p = todayProject();
     $('projPanel').classList.toggle('hidden', !p);
-    if (p) drawProject(p, $('projSteps'), true);
+    if (p) { drawProject(p, $('projSteps'), true); projectLink($('projHead'), p.name); }
     // a shared day: the day's other project gets its own card too
     $('projMore').innerHTML = '';
     for (const q of todayProjects().filter((x) => x !== p)) {
       const sec = document.createElement('section'); sec.className = 'panel';
-      const b = document.createElement('button'); b.className = 'proj-head';
+      const b = document.createElement('a'); b.className = 'proj-head';
       b.innerHTML = '<div style="flex:1 1 auto;min-width:0"><div class="kicker k">Today’s project too</div><div class="name"></div><div class="dim"></div></div><span style="color:var(--brass);font-weight:600;white-space:nowrap">Open the project</span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
       b.querySelector('.name').textContent = q.name;
       const ready = q.steps.filter((x) => !stepParts(x.text).waits).length;
       b.querySelector('.dim').textContent = `${ready} step${ready === 1 ? '' : 's'} ready` + (q.every ? ` · every ${q.every}` : '');
-      b.onclick = () => openProject(q.name);
+      projectLink(b, q.name);
       sec.appendChild(b); $('projMore').appendChild(sec);
     }
     $('thenLine').textContent = next.after?.length ? `Then: ${stepParts(next.after[0]).title}` : '';
@@ -555,12 +568,12 @@
     const tp = todayProject();
     for (const p of next.projects) {
       const d = document.createElement('section'); d.className = 'panel';
-      const s = document.createElement('button'); s.className = 'proj-head';
+      const s = document.createElement('a'); s.className = 'proj-head';
       s.innerHTML = '<div style="flex:1 1 auto;min-width:0"><div class="kicker k"></div><div class="name"></div><div class="dim"></div></div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0a050" stroke-width="1.8" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
       s.querySelector('.kicker').textContent = todayProjects().includes(p) ? "Today's project" : 'Project';
       s.querySelector('.name').textContent = p.name;
       s.querySelector('.dim').textContent = `${p.steps.length} open` + (p.every ? ` · every ${p.every}` : '');
-      s.onclick = () => openProject(p.name);
+      projectLink(s, p.name);
       d.appendChild(s); box.appendChild(d);
     }
   }
@@ -633,14 +646,15 @@
   };
 
   // ---------- today's project opens its own page ----------
-  $('projHead').onclick = () => { const p = todayProject(); if (p) openProject(p.name); };
+  // ($('projHead') gets its link and click in render(), from today's project)
 
   // ---------- the project page: the brain (what connects to what) and the timeline (done → now → locked → goal) ----------
   // Read from the planner itself: open steps in state/now.md, finished ones in state/solved.md (with why each came up,
   // the solution and why that) and state/history, the areas in definitions/areas.md, project names in
   // definitions/projects.md, the goal in definitions/goals.md, notes in state/notes and state/library.
   // A file that isn't there (404) is read as empty: steps then sit under "Unsorted" and finished ones come from history.
-  let curProject = store.get('deskProject'), pv = store.get('deskPV', 'flow'), sel = null, model = null, pd = null, showAllLocked = false;
+  let curProject = urlProject || tab.get('project') || store.get('deskProject'), pv = store.get('deskPV', 'flow'), sel = null, model = null, pd = null, showAllLocked = false;
+  let curView = urlProject ? 'project' : tab.get('view') || store.get('deskView');
   if (!['flow', 'brain', 'list'].includes(pv)) pv = pv === 'graph' ? 'brain' : 'flow';
   const mockFiles = new Map(); // test copies only: files "written" by the page
   if (MOCK) globalThis.__mockFiles = mockFiles;
@@ -801,7 +815,7 @@
   const own = (m) => m.steps.filter((s) => !s.outside);
 
   function openProject(name, stepId = null) { curProject = name; store.set('deskProject', name); sel = stepId; showAllLocked = false; show('project'); drawProjectPage(); }
-  $('projBack').onclick = () => show(store.get('deskBack', 'home'));
+  $('projBack').onclick = () => show(tab.get('back', 'home'));
   for (const b of document.querySelectorAll('[data-pv]')) b.onclick = () => { pv = b.dataset.pv; store.set('deskPV', pv); drawProjectPage(); };
 
   async function drawProjectPage(force) {
@@ -845,7 +859,7 @@
   $('tlOpen').onclick = openTimeline;
   $('tlClose').onclick = () => $('tlDlg').close();
   let resizeT = 0;
-  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!model || store.get('deskView') !== 'project') return; if (pv !== 'brain') drawProjectPage(); else if ($('tlDlg').open) drawTimeline(model, $('tlBody')); }, 200); });
+  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!model || curView !== 'project') return; if (pv !== 'brain') drawProjectPage(); else if ($('tlDlg').open) drawTimeline(model, $('tlBody')); }, 200); });
   function drawTimeline(m, box = $('tlBody')) {
     box.innerHTML = '';
     const steps = own(m);
@@ -1489,7 +1503,9 @@
   let reasonOpen = false;
   async function waitForPlanner() { // the planner runs on GitHub (2 to 4 minutes); refresh when it has caught up
     const before = next?.made;
-    for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 15e3)); try { if (parseNext(await getNext()).made !== before) break; } catch {} }
+    let caughtUp = false;
+    for (let i = 0; i < 40 && !caughtUp; i++) { await new Promise((r) => setTimeout(r, 15e3)); try { caughtUp = parseNext(await getNext()).made !== before; } catch {} }
+    if (caughtUp) tellPeers();
     if (!busy && !reasonOpen) refresh();
   }
   const Reason = PlannerReason.create({
@@ -1633,13 +1649,16 @@
 
   // ---------- side bar and views ----------
   function show(view) {
-    const was = store.get('deskView');
-    if (view === 'project' && was && was !== 'project') store.set('deskBack', was);
+    const was = curView;
+    if (view === 'project' && was && was !== 'project') tab.set('back', was);
     for (const s of document.querySelectorAll('.view-sec')) s.classList.toggle('hidden', s.id !== 'v-' + view);
     for (const b of document.querySelectorAll('.nav[data-view]')) b.classList.toggle('on', b.dataset.view === view || (view === 'project' && b.dataset.view === 'projects'));
     $('mainCol').classList.toggle('wide', view === 'project' || view === 'allbrain');
     stopGraph();
-    store.set('deskView', view);
+    curView = view; tab.set('view', view); store.set('deskView', view);
+    if (view === 'project' && curProject) tab.set('project', curProject);
+    // the address names this window's open project, so a reload keeps it and the link can be copied
+    try { const u = new URL(location.href); if (view === 'project' && curProject) u.searchParams.set('project', curProject); else u.searchParams.delete('project'); if (u.href !== location.href) history.replaceState(null, '', u); } catch {}
   }
   for (const b of document.querySelectorAll('[data-view]')) b.onclick = () => show(b.dataset.view);
   for (const b of document.querySelectorAll('[data-go]')) b.onclick = () => show(b.dataset.go);
@@ -1674,18 +1693,19 @@
       next = parseNext(raw);
       for (const id of [...isDoneLocally]) if (![...next.tasks, ...next.projects.flatMap((p) => p.steps.flatMap((s) => s.ids)), ...(next.planIds || []).flat(), ...(next.todayIds || []).flat()].includes(id)) isDoneLocally.delete(id);
       render();
-      if (store.get('deskView') === 'project') await drawProjectPage(true);
-      if (store.get('deskView') === 'allbrain') await drawAllBrain(true);
+      if (curView === 'project') await drawProjectPage(true);
+      if (curView === 'allbrain') await drawAllBrain(true);
       if (!busy) status('');
     } catch (e) { status(e.message, true); }
   }
   globalThis.__deskRefresh = refresh; // for testing with ?mock
-  show(['home', 'today', 'projects', 'allbrain', 'workout', 'shopping', 'week', 'goals'].includes(store.get('deskView')) || (store.get('deskView') === 'project' && curProject) ? store.get('deskView') : 'home');
+  show(['home', 'today', 'projects', 'allbrain', 'workout', 'shopping', 'week', 'goals'].includes(curView) || (curView === 'project' && curProject) ? curView : 'home');
   refresh();
-  // keep it current: every 5 minutes, and when you come back to the tab
+  // keep it current: every 5 minutes, when you come back to the tab, and when another window of this page has saved
   const idle = () => !busy && !confirmKind && !$('solDlg').open;
   setInterval(() => { if (idle()) refresh(); }, 5 * 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && idle()) refresh(); });
+  if (peers) peers.onmessage = () => { if (idle() && !reasonOpen) refresh(); };
 })();
 </script>
 </body>

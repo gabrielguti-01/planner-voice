@@ -412,7 +412,7 @@
     return b64decode((await r.json()).content);
   }
   async function appendInbox(lines) {
-    if (MOCK) { mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox; return; }
+    if (MOCK) { if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS)); if (globalThis.__MOCK_SAVE_FAIL) throw new Error('demo: no connection'); mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox; return; }
     for (let attempt = 0; attempt < 6; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt));
       const r = await api('state/inbox.md');
@@ -426,18 +426,50 @@
     throw new Error('GitHub kept refusing the save');
   }
   // send lines, then wait for the planner to work out the next step (it runs on GitHub, about a minute)
-  let busy = false;
+  // The outbox (user, 2026-11-16: "when I mark a step done, it must save at once and stay done"). Every line is kept in
+  // this browser first, then sent; one tab sends at a time (two project windows never send a line twice); a failed send
+  // retries every 20 s and after a reload. Before this, a second Done while the first one waited for the planner (up to
+  // 10 minutes) was silently dropped, though the screen showed it done.
+  const outbox = () => { try { return JSON.parse(store.get('deskOutbox', '[]')) || []; } catch { return []; } };
+  const setOutbox = (l) => store.set('deskOutbox', JSON.stringify(l));
+  const withLock = (fn) => (navigator.locks && navigator.locks.request ? navigator.locks.request('planner-desk-outbox', fn) : fn());
+  let flushing = null, flushRetry = 0;
+  function flush() {
+    if (!flushing) {
+      flushing = Promise.resolve(withLock(async () => {
+        try {
+          while (outbox().length) {
+            const batch = outbox();
+            await appendInbox(batch);
+            setOutbox(outbox().slice(batch.length)); // lines added meanwhile stay for the next round
+          }
+          return true;
+        } catch (e) {
+          status(`Not saved yet (${outbox().length} waiting in this browser): ${e.message}. Trying again in 20 seconds.`, true);
+          clearTimeout(flushRetry); flushRetry = setTimeout(() => flush(), 20000);
+          return false;
+        }
+      })).finally(() => { flushing = null; });
+    }
+    return flushing;
+  }
+  let busy = false; // waiting for the planner to catch up (only one wait at a time; saving never waits for it)
   async function send(lines, doneText) {
-    if (busy || !lines.length) return;
-    busy = true; setButtons(false);
+    if (!lines.length) return;
+    setOutbox([...outbox(), ...lines]); // kept in this browser at once, before anything else can go wrong
+    setButtons(false);
+    const saved = await flush();
+    setButtons(true);
+    if (!saved) return; // still in the outbox: it goes out on the next try
+    // Say it right on the card: the planner runs on GitHub and takes 2 to 4 minutes
+    $('stepKicker').textContent = 'Saved ✓';
+    $('step').textContent = `Saved: ${doneText}.`;
+    $('stepWhy').textContent = 'The planner is working out your next action. That takes 2 to 4 minutes; this page changes by itself.';
+    $('stepActions').classList.add('hidden');
+    status(`Saved: ${doneText}.`);
+    if (busy) return; // already waiting for the planner: that wait refreshes the page for this save too
+    busy = true;
     try {
-      await appendInbox(lines);
-      // Say it right on the card: the planner runs on GitHub and takes 2 to 4 minutes
-      $('stepKicker').textContent = 'Saved ✓';
-      $('step').textContent = `Saved: ${doneText}.`;
-      $('stepWhy').textContent = 'The planner is working out your next action. That takes 2 to 4 minutes; this page changes by itself.';
-      $('stepActions').classList.add('hidden');
-      status('');
       const before = next?.made;
       let caughtUp = MOCK;
       for (let i = 0; i < 40 && !caughtUp; i++) { // up to 10 minutes
@@ -447,8 +479,7 @@
       await refresh();
       if (caughtUp) tellPeers();
       status(caughtUp ? `Saved: ${doneText}.` : `Saved: ${doneText}. The planner hasn't caught up yet; this page will refresh on its own.`);
-    } catch (e) { status(`Not saved: ${e.message}`, true); }
-    finally { busy = false; setButtons(true); }
+    } finally { busy = false; }
   }
   const setButtons = (on) => { for (const b of document.querySelectorAll('#stepActions button, .tick, #tellGo, #tellYes')) b.disabled = !on; };
 
@@ -1512,7 +1543,9 @@
     helper: () => ({ url: store.get('helperUrl'), pass: store.get('helperPass') }),
     getFile, putFile, deleteFile, listDir,
     send: async (lines, text) => {
-      await appendInbox(lines);
+      // through the outbox too: kept in this browser first, so a failed send retries instead of being lost
+      setOutbox([...outbox(), ...lines]);
+      if (!(await flush())) throw new Error('not saved yet; it is kept in this browser and will be sent when GitHub answers');
       for (const l of lines) { const m = l.match(/^done: ([^|]+)/); if (m) m[1].split(',').forEach((x) => isDoneLocally.add(x.trim())); }
       status(`Saved: ${text}. The planner updates in 2 to 4 minutes.`);
       waitForPlanner();
@@ -1701,6 +1734,8 @@
   globalThis.__deskRefresh = refresh; // for testing with ?mock
   show(['home', 'today', 'projects', 'allbrain', 'workout', 'shopping', 'week', 'goals'].includes(curView) || (curView === 'project' && curProject) ? curView : 'home');
   refresh();
+  // anything still waiting in this browser's outbox (a save that failed, or a page closed mid-save) goes out now
+  if (outbox().length) setTimeout(() => flush(), 1500);
   // keep it current: every 5 minutes, when you come back to the tab, and when another window of this page has saved
   const idle = () => !busy && !confirmKind && !$('solDlg').open;
   setInterval(() => { if (idle()) refresh(); }, 5 * 60e3);

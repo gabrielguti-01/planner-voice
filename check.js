@@ -61,7 +61,7 @@
   // Words after which "a" is a letter used as a label ("option a", "vitamin a", "plan a"), not the article.
   const LABELS = new Set('option options vitamin vitamins plan plans grade grades type types part parts step steps group groups size sizes class row column item point letter exhibit appendix section level tier version'.split(' '));
   // A doubled word that is almost always a slip ("the the"); "had had" and "that that" can be right, so they aren't here.
-  const NO_DOUBLE = new Set('the a an to of in on at for and or it my me we you with this be by from as so but not your our their his her its'.split(' '));
+  const NO_DOUBLE = new Set('the an to of in on at for and or it my me we you with this be by from as so but not your our their his her its'.split(' '));
 
   // ---------- the dictionary (nspell + Hunspell en_US from dictionary-en; see spell/SOURCE.md) ----------
   const NODE = typeof module !== 'undefined' && !!module.exports && typeof require === 'function' && typeof __dirname === 'string';
@@ -179,7 +179,7 @@
     if (s.correct(word) || s.correct(low) || knownForm(low, s)) return null;
     // a day or month typed in lowercase gets its capital
     if (word === low && NAMES.has(low)) return cap(low);
-    const split = word === low ? splitFix(low, s, o) : null; // a capitalized word isn't split (it may be a name)
+    const split = splitFix(low, s, o); // only two everyday words, one of them short: "Whatcame" → "What came"
     if (split) return withCase(word, split);
     if (compound(low, s)) return null; // "chipset", "hardcoded": two real words written as one
     if (low.length <= 3 || low.length > 20 || o.budget.n <= 0) return null; // 3-letter words: only the TYPOS list
@@ -189,10 +189,11 @@
       .filter((c) => /^[a-z]+(?:'[a-z]+)?$/.test(c) && c !== low && (!c.includes("'") || c.replace("'", '') === low))
       // the first letter may be mistyped ("gigured") but not added or dropped ("iphone" isn't "phone"); a short word only becomes an everyday one
       .filter((c) => (c[0] === low[0] || (c.length === low.length && word === low && known(c))) && (low.length > 5 || known(c)))
-      // a capitalized word (the start of a sentence) may be a new name: it only becomes an everyday word ("Desing" → "Design",
-      // never "Kalena" → "Galena")
-      .filter((c) => word === low || known(c))
       .map((c) => { const raw = cost(low, c); return { c, raw, v: raw + (c[0] !== low[0] ? 1 : 0) }; })
+      // a capitalized word (the start of a sentence) may be a new name: it keeps its first letter and only takes a near slip
+      // (a swap or a doubled letter, "Scheudle", "Reveiw"), one close edit in a longer word ("Comfirm", "Excercise"), or an
+      // everyday word ("Desing" → "Design"); never "Kalena" → "Galena" or "Maira" → "Mara"
+      .filter((x) => word === low || (x.c[0] === low[0] && (x.raw <= 0.5 || (low.length >= 7 && x.raw <= 1) || (known(x.c) && low.length >= 5 && x.raw <= 1))))
       .sort((a, b) => a.v - b.v || (a.c < b.c ? -1 : 1));
     // a word far from every real word is a name or a brand, not a slip: short words need one near slip, middle ones one edit
     if (!cands.length || cands[0].raw > (low.length <= 5 ? 0.8 : low.length <= 8 ? 1.3 : 2)) return null;
@@ -269,7 +270,7 @@
     // 2. doubled words ("the the")
     for (let i = 0; i + 2 < toks.length; i++) {
       const a = toks[i], s = toks[i + 1], b = toks[i + 2];
-      if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t))) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
+      if (a.k === 'w' && s.k === 's' && s.t === ' ' && b.k === 'w' && lc(a.t) === lc(b.t) && NO_DOUBLE.has(lc(a.t)) && !/^[A-Z]$/.test(b.t)) { note(`${a.o} ${b.o}`, a.o, 'double'); toks.splice(i + 1, 2); i--; }
     }
     // 3. a / an before a lowercase word (not a letter used as a label: "option a or b", "vitamin a and zinc")
     for (let i = 0; i + 2 < toks.length; i++) {
@@ -435,20 +436,24 @@
       .replace(/c(?=[eiy])/g, 's').replace(/[cq]/g, 'k').replace(/z/g, 's').replace(/gh/g, '').replace(/wh/g, 'w').replace(/v/g, 'f');
     return (s[0] + s.slice(1).replace(/[aeiouyhw]/g, '')).replace(/(.)\1+/g, '$1');
   }
+  const ABBR = new Set('dr mr mrs ms st jr sr vs etc prof mt ft no'.split(' '));
+  const englishWord = (w) => { try { return ready() && (speller().correct(w) || COMMON.has(w)); } catch { return false; } };
   /** The protected pieces of a text, in order: what an AI answer must keep exactly. */
   function protectedOf(text, words) {
     const W = words instanceof Set ? words : wordsOf(words || []);
     const out = [];
-    let start = true; // at the start of a sentence a capital is just the sentence's
+    let start = true, prev = ''; // at the start of a sentence a capital is just the sentence's
     for (const t of tokenize(String(text))) {
       if (t.k === 'x') { out.push(t.t); start = false; continue; }
-      if (t.k === 'p') { if (/[.!?]/.test(t.t)) start = true; continue; }
+      if (t.k === 'p') { if (/[.!?]/.test(t.t) && !(t.t === '.' && prev && ABBR.has(lc(prev)))) start = true; continue; }
       if (t.k !== 'w') continue;
       const w = lc(t.t);
       if (DATE_WORDS.has(w) || NUMBER_WORDS.has(w)) out.push(w); // a date or a number (its capital may change)
       else if (isNegation(w)) out.push('¬'); // a negation, added or taken away, flips the meaning
-      else if (/[A-Z]/.test(t.t) && (!start || W.has(w))) out.push(t.t); // a name: capitalized mid-sentence, or a personal word
-      start = false;
+      // a name: capitalized mid-sentence, a personal word, or a capitalized word that isn't English ("Kalena" at the start);
+      // kept without its capital, so capitalizing a word ("english" → "English", "i" → "I") stays free
+      else if (/[A-Z]/.test(t.t) && !/^I(?:['’]\w+)?$/.test(t.t) && (!start || W.has(w) || !englishWord(w))) out.push(`name:${w}`);
+      start = false; prev = t.t;
     }
     return out;
   }
@@ -465,7 +470,12 @@
     if (typeof after !== 'string' || !after.trim()) return { ok: false, reason: 'empty answer' };
     if (/[|\n]/.test(after) && !/[|\n]/.test(before)) return { ok: false, reason: 'a "|" or a line break was added' };
     const pa = protectedOf(before, words), pb = protectedOf(after, words);
-    if (pa.length !== pb.length || pa.some((x, i) => x !== pb[i])) return { ok: false, reason: 'a name, ID, number, date, link, quote or "not" changed' };
+    const isName = (x) => x.startsWith('name:');
+    const fa0 = pa.filter((x) => !isName(x)), fb0 = pb.filter((x) => !isName(x));
+    if (fa0.length !== fb0.length || fa0.some((x, i) => x !== fb0[i])) return { ok: false, reason: 'a name, ID, number, date, link, quote or "not" changed' };
+    // every name stays; a "new" name may only be a word of the text that got its capital ("english" → "English")
+    const had = new Set(wordsIn(before).map(bare)), nb0 = pb.filter(isName).map((x) => x.slice(5));
+    if (pa.filter(isName).some((x) => !nb0.includes(x.slice(5))) || nb0.some((x) => !had.has(x))) return { ok: false, reason: 'a name changed' };
     const na = wordsIn(before).length, nb = wordsIn(after).length;
     if (Math.abs(na - nb) > 1) return { ok: false, reason: 'the word count changed by more than 1' };
     const real = (w) => { try { return ready() ? speller().correct(w) || speller().correct(lc(w)) : true; } catch { return true; } };
@@ -480,6 +490,11 @@
       if (fa.length === fb.length) for (let i = 0; i < fa.length; i++) {
         const x = bare(fa[i]), y = bare(fb[i]);
         if (x === y || x.replace(/'/g, '') === y.replace(/'/g, '')) continue; // an apostrophe: "programs" → "program's"
+        // a word form of the same word is a grammar fix: "go" → "goes", "bag" → "bags", "broke" → "broken"
+        const inflection = (a, b) => b.startsWith(a) && /^(?:s|es|ed|d|ing|en|n|'s)$/.test(b.slice(a.length));
+        if (inflection(x, y) || inflection(y, x)) continue;
+        if (real(x) && !real(y)) return { ok: false, reason: `"${fa[i]}" is a real word and "${fb[i]}" isn't` };
+        if (!real(x) && !COMMON.has(y)) return { ok: false, reason: `"${fa[i]}" isn't an English word (a name?), and "${fb[i]}" isn't an everyday one` };
         if (real(x) && real(y) && soundKey(x) !== soundKey(y) && !CONFUSABLE.has(`${x}:${y}`)) return { ok: false, reason: `"${fa[i]}" → "${fb[i]}" changes one real word into another` };
       }
       changed += Math.max(fa.length, fb.length, 1);

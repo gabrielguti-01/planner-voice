@@ -1524,6 +1524,8 @@ try {
 
   // ---------- handling what was said ----------
   function handle(text, spoken = false) {
+    // a line still waiting for the AI that would save by itself goes now, with its spelling fixes, before the new one
+    if (pendingAi && pendingAi.go && pendingAi.lines.length) { const held = pendingAi; pendingAi = null; pendingLines = held.lines.slice(); send(); }
     // spoken words are checked against the words that matter right now; typed words are taken as written
     const r = toCommands(text, today(), { tasks: next?.tasks || [], step: next?.step || '', vocab: spoken ? PlannerSpeech.vocabFrom(next) : null });
     lastHandled = r;
@@ -1543,11 +1545,11 @@ try {
     const go = $('autosend').checked && !r.uncertain;
     // the optional AI proofread (the helper): at most 4 seconds, then step 1's result goes out
     if (aiOn() && hasText(r.commands)) {
-      const mine = { orig: r.commands.slice(), go };
+      const mine = { orig: r.commands.slice(), go, lines: pendingLines.slice() }; // lines: what goes if anything cuts the wait short
       pendingAi = mine;
       drawHeard('Checking the wording…');
       PlannerCheck.proofreadLines(r.commands, { words: personalWords(), url: store.get('helperUrl'), pass: store.get('helperPass'), timeoutMs: 4000 })
-        .then((res) => { if (pendingAi !== mine || !pendingLines.length) return; const f = fixOf(r.commands, res); pendingFix = f; pendingLines = f ? f.lines : r.commands; })
+        .then((res) => { if (pendingAi !== mine || !pendingLines.length) return; const f = fixOf(r.commands, res); pendingFix = f; pendingLines = f ? f.lines : r.commands; mine.lines = pendingLines.slice(); })
         .catch(() => {})
         .finally(() => { if (pendingAi !== mine) return; pendingAi = null; drawHeard(); drawLines(); if (go && pendingLines.length) send(); });
       return;
@@ -1647,6 +1649,8 @@ try {
     else refresh().then(() => speak(next?.say));
   }
   async function send() {
+    // another save (a check-off, a confirm button) while a line waits for the AI: that line goes first, never lost
+    if (pendingAi && pendingAi.go && pendingAi.lines.length && pendingAi.lines.join('\n') !== pendingLines.join('\n')) { const held = pendingAi.lines; pendingAi = null; pendingLines = [...held, ...pendingLines]; }
     const lines = pendingLines; pendingLines = [];
     if (!lines.length) return;
     // the fixes just sent stay undoable ("Keep my words") under the status line

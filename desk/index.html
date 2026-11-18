@@ -378,7 +378,8 @@
 <script src="../speech.js?v=20261029a"></script>
 <script src="../reason.js?v=20261107a"></script>
 <script src="../spell/nspell.js?v=20261116a"></script>
-<script src="../check.js?v=20261116a"></script>
+<script src="../check.js?v=20261117a"></script>
+<script src="../save.js?v=20261117a"></script>
 <script>
 (() => {
   'use strict';
@@ -422,27 +423,53 @@
     if (!r.ok) throw new Error(r.status === 401 ? 'The token was refused. Check it in Settings.' : r.status === 404 ? 'Repository or file not found. Check Settings.' : `GitHub answered ${r.status}.`);
     return b64decode((await r.json()).content);
   }
-  async function appendInbox(lines) {
-    if (MOCK) { mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox; return; }
+  // maybeSaved: the same lines were being saved when the last try stopped, so they are written only if the inbox
+  // doesn't already end with them (saved exactly once); the phone view does the same
+  async function appendInbox(lines, { maybeSaved = false } = {}) {
+    if (MOCK) {
+      if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS));
+      if (maybeSaved && PlannerSave.endsWith(mockInbox, lines)) return;
+      if (globalThis.__MOCK_SAVE_FAIL) throw new Error('demo: no connection');
+      mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox;
+      if (globalThis.__MOCK_SAVE_LOST) { globalThis.__MOCK_SAVE_LOST = false; throw new Error('demo: the answer was lost'); }
+      return;
+    }
+    let tried = maybeSaved;
     for (let attempt = 0; attempt < 6; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt));
       const r = await api('state/inbox.md');
       if (!r.ok) { if (r.status >= 500 || r.status === 409) continue; throw new Error(`Could not read the inbox (${r.status}).`); }
       const j = await r.json();
-      const body = b64decode(j.content).replace(/\n*$/, '\n') + lines.map((l) => `- ${l}`).join('\n') + '\n';
+      const was = b64decode(j.content);
+      if (tried && PlannerSave.endsWith(was, lines)) return; // the earlier try got there
+      const body = was.replace(/\n*$/, '\n') + lines.map((l) => `- ${l}`).join('\n') + '\n';
+      tried = true;
       const w = await api('state/inbox.md', { method: 'PUT', body: JSON.stringify({ message: `Inbox: ${lines.join('; ').slice(0, 60)}`, content: b64encode(body), sha: j.sha }) });
       if (w.ok) return;
       if (w.status !== 409 && w.status !== 422 && w.status < 500) throw new Error(`Could not save (${w.status}).`);
     }
     throw new Error('GitHub kept refusing the save');
   }
+  // the lines to save wait in this browser (the same queue as the phone view), so a save never gets lost to a busy
+  // page, a closed tab or no connection; one saver across tabs, in order, each line once (save.js)
+  let notSaved = false;
+  const saver = PlannerSave.create({
+    get: (k) => store.get(k), set: (k, v) => store.set(k, v), key: 'outbox', append: appendInbox, locks: navigator.locks,
+    onError: (e, n) => { notSaved = true; status(`Not saved yet (${n} waiting): ${e.message}. Trying again shortly.`, true); },
+    onSaved: () => { if (notSaved && !saver.waiting().length) { notSaved = false; status('Saved what was waiting.'); } },
+  });
+  const flush = () => saver.flush();
+  if (!MOCK && saver.waiting().length) setTimeout(() => flush(), 1500);
+  window.addEventListener('online', () => { if (saver.waiting().length) flush(); });
   // send lines, then wait for the planner to work out the next step (it runs on GitHub, about a minute)
   let busy = false;
   async function send(lines, doneText) {
-    if (busy || !lines.length) return;
+    if (!lines || !lines.length) return;
+    saver.queue(lines); // kept at once: whatever happens next, these lines are saved
+    if (busy) { flush(); return; } // already waiting for the planner: these go along
     busy = true; setButtons(false);
     try {
-      await appendInbox(lines);
+      if (!(await flush())) return; // not saved yet: the status says so, and it tries again by itself
       // Say it right on the card: the planner runs on GitHub and takes 2 to 4 minutes
       $('stepKicker').textContent = 'Saved ✓';
       $('step').textContent = `Saved: ${doneText}.`;
@@ -1465,20 +1492,25 @@
           // the spelling check marks its fixes here first: Accept all or Keep mine
           const fixBox = document.createElement('div'); fixBox.className = 'fixbox hidden';
           const mine = document.createElement('button'); mine.className = 'btn small hidden'; mine.textContent = 'Keep mine'; mine.style.cssText = 'margin:8px 0 0 8px';
-          let fixed = null;
-          const sendIt = (lines) => { send(lines, 'your answers'); ta.value = ''; b.textContent = 'Sent ✓'; b.disabled = true; mine.classList.add('hidden'); fixBox.classList.add('hidden'); };
+          let fixed = null, checked = null; // checked: the box's text that the fixes (or the save) belong to
+          // the box is emptied only if it still holds what was sent: anything typed after that stays
+          const sendIt = (lines) => { send(lines, 'your answers'); if (ta.value === checked) ta.value = ''; b.textContent = 'Sent ✓'; b.disabled = true; mine.classList.add('hidden'); fixBox.classList.add('hidden'); };
           b.onclick = async () => {
             if (fixed) return sendIt(fixed.lines);
             const t = clip(ta.value); if (!t) { ta.focus(); return; }
             const line = `notes: ${id} | Answers to the organizer's questions | ${t}`;
+            const typed = ta.value;
             b.disabled = true;
-            fixed = await checkLines([line]);
+            const fx = await checkLines([line]);
             b.disabled = false;
+            // typed on while it was being checked: nothing is sent, the newer text stays as it is; the button checks it
+            if (ta.value !== typed) { fixBox.textContent = 'You changed it while it was being checked. Send answers checks this version.'; fixBox.classList.remove('hidden'); return; }
+            checked = typed; fixed = fx;
             if (!fixed) return sendIt([line]);
             drawFixes(fixBox, fixed); b.textContent = 'Accept all'; mine.classList.remove('hidden');
           };
           mine.onclick = () => { if (fixed) sendIt(fixed.orig); };
-          ta.addEventListener('input', () => { if (fixed) { fixed = null; b.textContent = 'Send answers'; mine.classList.add('hidden'); fixBox.classList.add('hidden'); } });
+          ta.addEventListener('input', () => { if (fixed) { fixed = null; b.textContent = 'Send answers'; mine.classList.add('hidden'); fixBox.classList.add('hidden'); } if (b.textContent === 'Sent ✓') { b.textContent = 'Send answers'; b.disabled = false; } });
           q.appendChild(fixBox);
           q.appendChild(b);
           q.appendChild(mine);
@@ -1653,8 +1685,11 @@
     $('solLeadsYes').onclick = () => pick(true); $('solLeadsNo').onclick = () => pick(false);
     pick(null);
     return new Promise((res) => {
-      const finish = (v) => { d.onclose = null; if (d.open) d.close(); res(v); };
+      let settled = false;
+      const finish = (v) => { settled = true; d.onclose = null; if (d.open) d.close(); res(v); };
       let review = null; // { v, fx } while the fixes are shown
+      // what the dialog holds right now: a check's answer applies only to the text it checked
+      const draftOf = () => JSON.stringify([$('solWhat').value, $('solWhy').value, $('solNext').value, leads]);
       // typing again after the fixes were shown: they no longer match, so Save checks again
       const unreview = () => { if (!review) return; review = null; $('solFix').classList.add('hidden'); $('solMine').classList.add('hidden'); $('solSave').textContent = saveText; };
       for (const id of ['solWhat', 'solWhy', 'solNext']) $(id).oninput = unreview;
@@ -1667,10 +1702,19 @@
         const v = { solution: $('solWhat').value, because: $('solWhy').value, next };
         if (mode !== 'done' && !clip(v.solution) && !clip(v.because)) { $('solWhat').focus(); return; }
         if (!compose) return finish(v);
-        const lines = compose(v);
+        const lines = compose(v), checked = draftOf();
         $('solSave').disabled = true; $('solSave').textContent = aiOn() ? 'Checking the wording…' : saveText;
         const fx = await checkLines(lines);
+        if (settled) return; // closed meanwhile
         $('solSave').disabled = false;
+        // typed on while it was being checked: nothing is saved, and the newer text stays exactly as it is (with the
+        // cursor where it was); Save checks this version
+        if (draftOf() !== checked) {
+          $('solSave').textContent = saveText;
+          $('solFix').textContent = 'You changed it while it was being checked. Save checks this version.';
+          $('solFix').classList.remove('hidden');
+          return;
+        }
         if (!fx) return finish({ ...v, lines });
         review = { v, fx };
         drawFixes($('solFix'), fx);
@@ -1679,7 +1723,7 @@
       };
       $('solSkip').onclick = (e) => { e.preventDefault(); finish({}); };
       $('solCancel').onclick = (e) => { e.preventDefault(); finish(null); };
-      d.onclose = () => res(null);
+      d.onclose = () => { settled = true; res(null); };
       if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
       $('solWhat').focus();
     });
@@ -1717,9 +1761,10 @@
   }
 
   // ---------- typing to the planner (the same reading as the phone's typed box) ----------
-  let tellFix = null, tellSeq = 0;
+  let tellFix = null, tellSeq = 0, tellText = '';
   async function tell() {
     const v = $('tell').value.trim(); if (!v || !next) return;
+    tellText = $('tell').value; // the box is emptied after Save only if it still holds this
     const r = toCommands(v, today(), { tasks: next.tasks || [], step: next.step || '', vocab: null });
     if (!r.commands.length) { status('That reads as a question, not a report. Try the phone view for questions.'); return; }
     const seq = ++tellSeq;
@@ -1746,8 +1791,9 @@
   $('tell').addEventListener('input', () => { if (tellLines.length) tellDone(); });
   const tellDone = () => { tellLines = []; tellFix = null; tellSeq++; $('tellBox').classList.add('hidden'); $('tellFix').classList.add('hidden'); $('tellMine').classList.add('hidden'); };
   $('tellNo').onclick = tellDone;
-  $('tellYes').onclick = () => { const l = tellLines; tellDone(); $('tell').value = ''; send(l, l.join('; ')); };
-  $('tellMine').onclick = () => { const l = tellFix ? tellFix.orig : tellLines; tellDone(); $('tell').value = ''; send(l, l.join('; ')); };
+  const tellClear = () => { if ($('tell').value === tellText) $('tell').value = ''; };
+  $('tellYes').onclick = () => { const l = tellLines; tellDone(); tellClear(); send(l, l.join('; ')); };
+  $('tellMine').onclick = () => { const l = tellFix ? tellFix.orig : tellLines; tellDone(); tellClear(); send(l, l.join('; ')); };
 
   // ---------- side bar and views ----------
   function show(view) {

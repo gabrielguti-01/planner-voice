@@ -884,7 +884,8 @@ try {
 
 <script src="speech.js?v=20261029a"></script>
 <script src="spell/nspell.js?v=20261116a"></script>
-<script src="check.js?v=20261116a"></script>
+<script src="check.js?v=20261117a"></script>
+<script src="save.js?v=20261117a"></script>
 <script src="journal-link.js?v=20261102a"></script>
 <script>
 (() => {
@@ -1188,41 +1189,43 @@ try {
     if (!r.ok) throw new Error(r.status === 401 ? 'The token was refused. Check it in Settings.' : r.status === 404 ? 'Repository or file not found. Check Settings.' : `GitHub answered ${r.status}.`);
     return b64decode((await r.json()).content);
   }
-  async function appendInbox(lines) {
-    if (MOCK) { if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS)); if (globalThis.__MOCK_SAVE_FAIL) throw new Error('demo: no connection'); mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox; return; }
+  // maybeSaved: the same lines were being saved when the last try stopped (no answer, no connection), so they may be
+  // in the inbox already; they are written only if the inbox doesn't already end with them (saved exactly once)
+  async function appendInbox(lines, { maybeSaved = false } = {}) {
+    if (MOCK) {
+      if (globalThis.__MOCK_SAVE_MS) await new Promise((r) => setTimeout(r, globalThis.__MOCK_SAVE_MS));
+      if (maybeSaved && PlannerSave.endsWith(mockInbox, lines)) return;
+      if (globalThis.__MOCK_SAVE_FAIL) throw new Error('demo: no connection');
+      mockInbox.push(...lines); globalThis.__MOCK_INBOX = mockInbox;
+      if (globalThis.__MOCK_SAVE_LOST) { globalThis.__MOCK_SAVE_LOST = false; throw new Error('demo: the answer was lost'); } // saved, but the page never heard
+      return;
+    }
+    let tried = maybeSaved;
     for (let attempt = 0; attempt < 6; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt)); // GitHub may still be settling the last write
       const r = await api('state/inbox.md');
       if (!r.ok) { if (r.status >= 500 || r.status === 409) continue; throw new Error(`Could not read the inbox (${r.status}).`); }
       const j = await r.json();
-      const body = b64decode(j.content).replace(/\n*$/, '\n') + lines.map((l) => `- ${l}`).join('\n') + '\n';
+      const was = b64decode(j.content);
+      if (tried && PlannerSave.endsWith(was, lines)) return; // the earlier try got there
+      const body = was.replace(/\n*$/, '\n') + lines.map((l) => `- ${l}`).join('\n') + '\n';
+      tried = true;
       const w = await api('state/inbox.md', { method: 'PUT', body: JSON.stringify({ message: `Inbox: ${lines.join('; ').slice(0, 60)}`, content: b64encode(body), sha: j.sha }) });
       if (w.ok) return;
       if (w.status !== 409 && w.status !== 422 && w.status < 500) throw new Error(`Could not save (${w.status}).`);
     }
     throw new Error('GitHub kept refusing the save');
   }
-  // the outbox: lines waiting to be saved, kept on the phone so nothing is lost; one saver, in order
-  const outbox = () => { try { return JSON.parse(store.get('outbox', '[]')) || []; } catch { return []; } };
+  // the outbox: lines waiting to be saved, kept on the phone so nothing is lost; one saver (across tabs), in order,
+  // each line once. save.js decides at sending time what the planner engine can read (see there).
+  const saver = PlannerSave.create({
+    get: (k) => store.get(k), set: (k, v) => store.set(k, v), key: 'outbox', append: appendInbox, locks: navigator.locks,
+    onError: (e, n) => status(`Not saved yet (${n} waiting): ${e.message}. Trying again shortly.`, 'bad'),
+  });
+  const outbox = () => saver.waiting();
   const setOutbox = (l) => store.set('outbox', JSON.stringify(l));
-  let flushing = null, flushRetry = 0;
-  function flush() {
-    if (!flushing) flushing = (async () => {
-      try {
-        while (outbox().length) {
-          const batch = outbox();
-          await appendInbox(batch);
-          setOutbox(outbox().slice(batch.length)); // lines queued meanwhile stay for the next round
-        }
-        return true;
-      } catch (e) {
-        status(`Not saved yet (${outbox().length} waiting): ${e.message}. Trying again shortly.`, 'bad');
-        clearTimeout(flushRetry); flushRetry = setTimeout(() => flush(), 20000);
-        return false;
-      } finally { flushing = null; }
-    })();
-    return flushing;
-  }
+  const flush = () => saver.flush();
+  window.addEventListener('online', () => { if (outbox().length) flush(); });
 
   // ---------- render ----------
   function render() {
@@ -1322,12 +1325,10 @@ try {
     $('toastUndo').onclick = () => {
       $('toast').classList.add('hidden');
       for (const id of ids) closedIds.delete(id);
-      pendingLines = [`undo: ${ids.join(', ')}`];
-      send().then(() => refresh());
+      send([`undo: ${ids.join(', ')}`]).then(() => refresh());
     };
-    pendingLines = [`done: ${ids.join(', ')}`];
     lastHandled = { closesCurrent: false };
-    send().finally(() => { lastHandled = null; });
+    send([`done: ${ids.join(', ')}`]).finally(() => { lastHandled = null; });
   }
   // notes for the step on screen: a workflow's steps and the notes by heading, each heading folded until opened
   let notesOpen = false;
@@ -1596,15 +1597,19 @@ try {
     }
     const fx = sentFix;
     if (!fx) return;
-    sentFix = null;
     const ob = outbox(), changed = fx.results.map((r, i) => ({ r, i })).filter((x) => x.r.changed), at = changed.map((x) => ob.indexOf(fx.lines[x.i]));
-    if (!flushing && at.every((i) => i >= 0)) { // still waiting in the outbox: swap in the user's words
+    if (!saver.busy() && at.every((i) => i >= 0)) { // still waiting in the outbox: swap in the user's words
       changed.forEach((x, k) => { ob[at[k]] = fx.orig[x.i]; });
       setOutbox(ob);
-    } else { // already saved (or being saved): the planner puts the user's words back
+    } else if (PlannerSave.engineCaps().keepWords) { // already saved (or being saved): the planner puts the user's words back
       const kw = PlannerCheck.keepWordsLines(fx.results);
-      if (kw.length) setOutbox([...outbox(), ...kw]);
+      if (kw.length) saver.queue(kw);
+    } else { // a planner not known to read "keep words:" would misread it: nothing is sent, and the user is told
+      sentFix = null;
+      $('fixNote').textContent = 'Already saved with the fix. This planner can’t put your words back yet; change it in the planner if needed.';
+      return;
     }
+    sentFix = null;
     flush();
     $('fixNote').textContent = 'Keeping your words.';
   }
@@ -1648,19 +1653,23 @@ try {
     else if (action === 'week') { drawer(true); $('weekBox').open = true; speak(next.week.length ? `Coming up: ${next.week.join('. ')}.` : 'Nothing dated this week.'); }
     else refresh().then(() => speak(next?.say));
   }
-  async function send() {
-    // another save (a check-off, a confirm button) while a line waits for the AI: that line goes first, never lost
-    if (pendingAi && pendingAi.go && pendingAi.lines.length && pendingAi.lines.join('\n') !== pendingLines.join('\n')) { const held = pendingAi.lines; pendingAi = null; pendingLines = [...held, ...pendingLines]; }
-    const lines = pendingLines; pendingLines = [];
+  // send(): the line on the card (Save, or by itself). send(lines): a button's own lines (a check-off, a confirm). A line
+  // on the card that would save by itself once the AI answers goes first, never lost; one that waits for the user's
+  // Save stays on the card as it is.
+  async function send(extra) {
+    const own = Array.isArray(extra) ? extra.slice() : null;
+    const cardGoes = !own || !!(pendingAi && pendingAi.go && pendingAi.lines.length);
+    const card = !cardGoes ? [] : own ? pendingAi.lines.slice() : pendingLines;
+    const lines = [...card, ...(own || [])];
     if (!lines.length) return;
     // the fixes just sent stay undoable ("Keep my words") under the status line
-    const fx = pendingFix && pendingFix.lines.join('\n') === lines.join('\n') ? pendingFix : null;
-    pendingFix = null; pendingAi = null; sentFix = fx;
+    const fx = card.length && pendingFix && pendingFix.lines.join('\n') === card.join('\n') ? pendingFix : null;
+    if (cardGoes) { pendingLines = []; pendingFix = null; pendingAi = null; $('pending').classList.add('hidden'); }
+    sentFix = fx;
     if (fx) { fixedLine($('fixNote'), fx); $('fixNote').classList.remove('hidden'); }
     else $('fixNote').classList.add('hidden'); // an older "Keep my words" no longer applies
     $('send').disabled = true;
     try {
-      $('pending').classList.add('hidden');
       const made = next?.made, snap = JSON.stringify(next); // made:: has minute resolution, so the content is compared too
       // The current step was reported done or skipped: the next one is already known, so show it and say it at once
       // (the same text on screen and out loud), before the save even starts, so a quick second "Done" closes the
@@ -1675,7 +1684,7 @@ try {
         render();
         if ($('autospeak').checked) speak(shownNow);
       }
-      setOutbox([...outbox(), ...lines]);
+      saver.queue(lines); // kept on the phone at once; saved in order, each line once
       setState('saving');
       const saved = await flush();
       setState('idle');
@@ -1701,7 +1710,7 @@ try {
     } catch (e) { setState('idle'); status(`Not saved: ${e.message}`, 'bad'); if ($('autospeak').checked) speak('Not saved.'); }
     finally { $('send').disabled = false; }
   }
-  $('send').onclick = send;
+  $('send').onclick = () => send();
   if (!MOCK && outbox().length) setTimeout(() => flush(), 1500);
   // the spelling check's dictionary (about 0.5 MB): fetched after the first paint and built while the phone is idle,
   // so the first fix doesn't wait; until it is ready, lines go out as typed
@@ -1767,10 +1776,9 @@ try {
         if (next.groceryRun) lines.push(`done: ${next.groceryRun}`);
         shopConfirming = false;
         if (!lines.length) { drawGroceries(); return; }
-        pendingLines = lines;
         lastHandled = { closesCurrent: !!next.groceryRun && (next.tasks || []).includes(next.groceryRun) };
         const key = shopKey();
-        await send();
+        await send(lines);
         lastHandled = null;
         store.set(key, '[]');
         status(`Done shopping: ${picked} recorded as bought${left ? `; ${left} still on the list` : ''}.`);
@@ -1826,9 +1834,8 @@ try {
     no.onclick = () => pop.remove();
     yes.onclick = async () => {
       pop.remove();
-      pendingLines = [`done: ${w.gym}`];
       lastHandled = { closesCurrent: (next?.tasks || []).includes(w.gym) };
-      await send();
+      await send([`done: ${w.gym}`]);
       lastHandled = null;
       status(`Workout ${w.session} checked off. Tomorrow's session shows here once the planner updates.`);
     };
@@ -1855,9 +1862,8 @@ try {
     no.onclick = () => pop.remove();
     const go = async (lines, msg) => {
       pop.remove();
-      pendingLines = lines;
       lastHandled = { closesCurrent: (next?.tasks || []).includes(w.gym) };
-      await send();
+      await send(lines);
       lastHandled = null;
       status(msg);
     };
@@ -1979,32 +1985,32 @@ try {
   $('confirmNo').onclick = closeConfirm;
   $('confirmFridge').onclick = async () => {
     if (confirmKind === 'avocado') { // not eaten: it goes into the smoothie, and lunch is still checked off
-      pendingLines = [`done: ${next.tasks.join(', ')}`];
+      const lines = [`done: ${next.tasks.join(', ')}`];
       lastHandled = { closesCurrent: true };
       closeConfirm();
       $('stepActions').classList.add('hidden');
-      await send();
+      await send(lines);
       lastHandled = null;
       const t = 'Okay: add the avocado to the smoothie.';
       status(t); if ($('autospeak').checked) speak(t);
       return;
     }
     if (confirmKind !== 'smoothie' && confirmKind !== 'reply') return closeConfirm();
-    pendingLines = confirmKind === 'reply' ? [`no reply: ${next.tasks.join(', ')}`] : ['smoothie: fridge'];
+    const lines = confirmKind === 'reply' ? [`no reply: ${next.tasks.join(', ')}`] : ['smoothie: fridge'];
     lastHandled = { closesCurrent: true };
     closeConfirm();
     $('stepActions').classList.add('hidden');
-    await send();
+    await send(lines);
     lastHandled = null;
   };
   $('confirmYes').onclick = async () => {
     const kind = confirmKind === 'smoothie' || confirmKind === 'avocado' ? 'done' : confirmKind === 'reply' ? 'replied' : confirmKind;
     if (!kind || !next?.tasks?.length) return closeConfirm();
-    pendingLines = [`${kind}: ${next.tasks.join(', ')}`];
+    const lines = [`${kind}: ${next.tasks.join(', ')}`];
     lastHandled = { closesCurrent: true };
     closeConfirm();
     $('stepActions').classList.add('hidden');
-    await send();
+    await send(lines);
     lastHandled = null;
   };
   $('cancel').onclick = () => { pendingLines = []; pendingFix = null; pendingAi = null; $('pending').classList.add('hidden'); };

@@ -59,7 +59,17 @@
   // Days, months and languages: the only lowercase words given a capital.
   const NAMES = new Set('monday tuesday wednesday thursday friday saturday sunday january february march april may june july august september october november december english spanish american christmas thanksgiving easter halloween'.split(' '));
   // A field with Spanish in it is left as written.
-  const SPANISH = new Set('de la el los las que para por con del una uno unos unas y es se al lo su sus como pero esta este son hay muy también ya donde cuando porque sin sobre entre hasta desde nos les'.split(' '));
+  const SPANISH = new Set('de la el los las que para por con del una uno unos unas y es se al lo su sus como pero esta este son hay muy también ya donde cuando porque sin sobre entre hasta desde nos les hola gracias estas estás bien bueno buena buenos buenas mucho mucha tengo tiene quiero voy vamos mañana hoy ayer'.split(' '));
+  // …and so is one in French, Portuguese, Italian or German: their little words (none of them also an English word,
+  // so "son", "per", "die", "come", "pain" or "ma" never count) or two words with letters English doesn't use.
+  const FOREIGN = new Set(`et du des les une pour avec dans pas je nous vous est chez très mais au aux cette qui sur mes leur bonjour merci demain
+    não com uma dos das ao você também está muito obrigado obrigada amanhã hoje
+    il di della che sono gli anche molto questo questa domani grazie
+    und der das nicht mit ich ist ein eine zu auf für beim bitte danke heute wir sie meine`.split(/\s+/));
+  // valid British spellings the en_US dictionary lacks and no rule below derives (never "fixed" into another word)
+  const BRITISH = new Set(`aluminium pyjamas aeroplane aeroplanes sceptic sceptics sceptical scepticism ageing judgement judgements artefact
+    artefacts draught draughts moustache moustaches learnt spelt dreamt burnt leapt spoilt smelt kerb kerbs plough ploughs mould mouldy storey
+    storeys tyre tyres jewellery cheque cheques grey greys whilst amongst towards cosy doughnut doughnuts gaol sulphur mum mums maths`.split(/\s+/));
   // Words after which "a" is a letter used as a label ("option a", "vitamin a", "plan a"), not the article.
   const LABELS = new Set('option options vitamin vitamins plan plans grade grades type types part parts step steps group groups size sizes class row column item point letter exhibit appendix section level tier version'.split(' '));
   // A doubled word that is almost always a slip ("the the"); "had had" and "that that" can be right, so they aren't here.
@@ -176,7 +186,7 @@
   function wordFix(word, o) {
     const low = lc(word);
     if (TYPOS[low]) return withCase(word, TYPOS[low]);
-    if (low.length < 3 || ALLOW.has(low) || o.words.has(low) || /[^a-z']/.test(low)) return null; // accents: another language or a name
+    if (low.length < 3 || ALLOW.has(low) || BRITISH.has(low) || o.words.has(low) || /[^a-z']/.test(low)) return null; // accents: another language or a name
     const s = speller();
     if (s.correct(word) || s.correct(low) || knownForm(low, s)) return null;
     // a day or month typed in lowercase gets its capital
@@ -215,7 +225,12 @@
     const pre = low.match(/^(un|re|pre|non|over|under|out|mis|sub|super|anti|multi|self)-?(.{5,})$/);
     if (pre && (s.correct(pre[2]) || knownForm(pre[2], s))) return true;
     const uk = [low.replace(/our(?=s?$|ed$|ing$|ful|ite|able)/, 'or'), low.replace(/is(e|ed|es|ing|ation|ations)$/, 'iz$1'), low.replace(/ys(e|ed|es|ing)$/, 'yz$1'),
-      low.replace(/tre(s?)$/, 'ter$1'), low.replace(/ll(ed|ing|er|ers)$/, 'l$1'), low.replace(/ogue(s?)$/, 'og$1'), low.replace(/ence$/, 'ense')];
+      low.replace(/tre(s?)$/, 'ter$1'), low.replace(/ll(ed|ing|er|ers)$/, 'l$1'), low.replace(/ogue(s?)$/, 'og$1'), low.replace(/ence$/, 'ense'),
+      // "practise" (the verb) → "practice", "programme" → "program", "paediatrician"/"foetus" → "pediatrician"/"fetus"
+      low.replace(/^practis(e|ed|es|ing)$/, 'practic$1'), low.replace(/mme(s?)$/, 'm$1'), low.length >= 6 ? low.replace(/ae|oe/g, 'e') : low,
+      // one "l" where American doubles it, only in these endings (so a typo like "realy" or "smal" is still fixed):
+      // "enrolment", "instalment", "skilful", "fulfil", "enrol"
+      low.replace(/([^l])l(ment|ments|ful|fully)$/, '$1ll$2'), low.length >= 5 ? low.replace(/([^l])(il|ol)(s?)$/, (m, a, b, c) => `${a}${b}l${c}`) : low];
     return uk.some((v) => v !== low && s.correct(v));
   }
   function compound(low, s) {
@@ -234,6 +249,16 @@
       if (known(a) && known(b) && (FUNC.has(a) || FUNC.has(b))) both.push([a, b]);
     }
     return both.length === 1 ? `${both[0][0]} ${both[0][1]}` : null;
+  }
+
+  /** True when a text is (partly) in another language: "¿"/"¡", or two of its words are Spanish, French, Portuguese,
+   *  Italian or German little words, or have letters English doesn't use ("mañana", "crêpes", "Søren"). */
+  function foreign(text) {
+    const src = String(text);
+    if (/[¿¡]/.test(src)) return true;
+    let n = 0;
+    for (const m of src.matchAll(/\p{L}+(?:['’]\p{L}+)*/gu)) if (SPANISH.has(lc(m[0])) || FOREIGN.has(lc(m[0])) || /[^\x00-\x7f’]/.test(m[0])) n++; // ’: a phone's apostrophe
+    return n >= 2;
   }
 
   // ---------- one free-text field ----------
@@ -255,8 +280,8 @@
     if (!src.trim()) return { text: src, changes: [] };
     speller(); // build (or fail) before changing anything, so a broken dictionary changes nothing at all
     const toks = tokenize(src), other = [];
-    // Spanish (accents, ¿¡, or two Spanish little words): left exactly as written
-    if (/[¿¡]/.test(src) || toks.filter((t) => t.k === 'w' && (SPANISH.has(lc(t.t)) || /[áéíóúñ]/i.test(t.t))).length >= 2) return { text: src, changes: [] };
+    // another language (¿¡, or two of its little words or accented words): left exactly as written
+    if (foreign(src)) return { text: src, changes: [] };
     const note = (from, to, kind) => { if (from !== to) other.push({ from, to, kind }); };
     const prevWord = (i) => { for (let j = i - 1; j >= 0; j--) { if (toks[j].k === 's') continue; return toks[j]; } return null; };
     // 1. words: "i" → "I", known typos, misspellings, missing spaces
@@ -476,6 +501,10 @@
     const words = opts.words instanceof Set ? opts.words : wordsOf(opts.words || []);
     if (typeof after !== 'string' || !after.trim()) return { ok: false, reason: 'empty answer' };
     if (/[|\n]/.test(after) && !/[|\n]/.test(before)) return { ok: false, reason: 'a "|" or a line break was added' };
+    // another language, or a word with letters English doesn't use ("crêpes", "Søren"), is never rewritten
+    if (after !== before && foreign(before)) return { ok: false, reason: 'the text is in another language' };
+    const accented = (s) => wordsIn(s).filter((w) => /[^\x00-\x7f’]/.test(w.replace(/[“”‘’…—–]/g, ''))).map((w) => lc(w).replace(/^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu, '')).join(' ');
+    if (accented(before) !== accented(after)) return { ok: false, reason: 'a word with accents changed' };
     const pa = protectedOf(before, words), pb = protectedOf(after, words);
     const isName = (x) => x.startsWith('name:');
     const fa0 = pa.filter((x) => !isName(x)), fb0 = pb.filter((x) => !isName(x));
@@ -497,6 +526,9 @@
       if (fa.length === fb.length) for (let i = 0; i < fa.length; i++) {
         const x = bare(fa[i]), y = bare(fb[i]);
         if (x === y || x.replace(/'/g, '') === y.replace(/'/g, '')) continue; // an apostrophe: "programs" → "program's"
+        // a valid British spelling ("practise", "jewellery", "learnt") is the user's own, never "fixed"
+        const british = (w) => { try { return BRITISH.has(w) || (ready() && !speller().correct(w) && knownForm(w, speller())); } catch { return false; } };
+        if (british(x)) return { ok: false, reason: `"${fa[i]}" is a British spelling` };
         // a word form added to the same word is a grammar fix: "go" → "goes", "bag" → "bags", "use" → "used"
         const inflection = (a, b) => a.length >= 2 && b.startsWith(a) && (/^(?:s|ing|'s)$/.test(b.slice(a.length)) || (/(?:s|x|z|ch|sh|o)$/.test(a) && b.slice(a.length) === 'es'));
         if (inflection(x, y) && real(y)) continue;
@@ -552,7 +584,8 @@
     const W = opts.words instanceof Set ? opts.words : wordsOf(opts.words || []);
     const base = fixLines(lines, { words: W });
     const parts = [];
-    base.forEach((r, i) => (r.failed ? [] : r.fields).forEach((f, j) => parts.push({ i, j, text: f.to, field: f.field })));
+    // a text in another language isn't sent: it is never rewritten (guard), so the AI has nothing to do with it
+    base.forEach((r, i) => (r.failed ? [] : r.fields).forEach((f, j) => { if (!foreign(f.to)) parts.push({ i, j, text: f.to, field: f.field }); }));
     const fetchFn = opts.fetchFn || globalThis.fetch;
     if (!parts.length || !opts.url || !opts.pass || typeof fetchFn !== 'function') return base.map((r) => ({ ...r, ai: 'none' }));
     let answer = null;
@@ -593,7 +626,7 @@
     return out;
   }
 
-  const api = { load, ready, warm, fixText, fixLine, fixLines, parseLine, saidOf, diffWords, protectedOf, guard, GUARD, wordsOf, describe, SAID_TAGS, fetchDictionary, proofreadLines, keepWordsLines };
+  const api = { load, ready, warm, fixText, fixLine, fixLines, parseLine, saidOf, diffWords, protectedOf, guard, GUARD, wordsOf, describe, foreign, SAID_TAGS, fetchDictionary, proofreadLines, keepWordsLines };
   globalThis.PlannerCheck = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })();

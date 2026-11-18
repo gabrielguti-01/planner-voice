@@ -63,22 +63,28 @@ export async function open(browser, base, url, settings = {}, globals = {}) {
 }
 
 /**
- * A stand-in for GitHub's contents API for one made-up repository (state/next.md and state/inbox.md), so the real save
- * path runs without the network. loseNextPut: the next PUT is stored, then the connection is cut (the page never hears).
+ * A stand-in for GitHub's contents API for made-up repositories (each gets state/next.md and state/inbox.md, plus any
+ * files given), so the real read and save paths run without the network. gh.reads lists every GET as "repo:path";
+ * gh.offline cuts every request; gh.loseNextPut stores the next PUT, then cuts the connection (the page never hears).
  */
-export async function fakeGitHub(page, nextMd) {
-  const files = { 'state/next.md': nextMd, 'state/inbox.md': '# Inbox\n' };
-  const gh = { files, puts: 0, loseNextPut: false };
+export async function fakeGitHub(page, nextMd, repos = {}) {
+  const gh = { repos: {}, reads: [], puts: 0, offline: false, loseNextPut: false };
+  gh.repo = (name) => (gh.repos[name] ||= { 'state/next.md': nextMd, 'state/inbox.md': '# Inbox\n', ...(repos[name] || {}) });
+  for (const name of Object.keys(repos)) gh.repo(name);
   const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
   await page.route('https://api.github.com/**', async (r) => {
-    const path = decodeURIComponent(new URL(r.request().url()).pathname.replace(/^\/repos\/[^/]+\/[^/]+\/contents\//, ''));
-    if (!(path in files)) return r.fulfill({ status: 404, body: '{}' });
+    if (gh.offline) return r.abort('internetdisconnected');
+    const m = new URL(r.request().url()).pathname.match(/^\/repos\/([^/]+\/[^/]+)\/contents\/(.*)$/);
+    if (!m) return r.fulfill({ status: 404, body: '{}' });
+    const files = gh.repo(m[1]), path = decodeURIComponent(m[2]);
     if (r.request().method() === 'PUT') {
       const body = JSON.parse(r.request().postData());
       files[path] = Buffer.from(body.content, 'base64').toString('utf8'); gh.puts++;
       if (gh.loseNextPut) { gh.loseNextPut = false; return r.abort('connectionreset'); }
       return r.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
     }
+    gh.reads.push(`${m[1]}:${path}`);
+    if (!(path in files)) return r.fulfill({ status: 404, contentType: 'application/json', body: '{"message":"Not Found"}' });
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ content: b64(files[path]), sha: 'sha-' + files[path].length }) });
   });
   return gh;

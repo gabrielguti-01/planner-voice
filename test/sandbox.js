@@ -103,6 +103,8 @@ export default { join, resolve, dirname, basename };`),
     f['rules/CONSTANTS.md'] = await source('rules/CONSTANTS.md');
     for (const n of ['daily', 'weekly', 'monthly']) f[`definitions/${n}.md`] = seed.routines(n, await source(`definitions/${n}.md`));
     try { f['definitions/training.md'] = await source('definitions/training.md'); } catch { /* no program yet */ }
+    // what the engine reads (the page checks it before it sends "| said" lines); no file: the page saves as typed
+    try { f['engine/capabilities.json'] = await source('engine/capabilities.json'); } catch { /* an older engine */ }
     return f;
   }
   async function runEngine() {

@@ -1160,6 +1160,7 @@
     store.set('repo', $('repo').value.trim()); store.set('token', $('token').value.trim());
     store.set('autosend', $('autosend').checked ? '1' : '0'); store.set('pair', $('pair').checked ? '1' : '0'); store.set('autospeak', $('autospeak').checked ? '1' : '0');
     $('settings').open = false; drawer(false); refresh();
+    PlannerSave.checkEngine(); // another repository or token: not verified for it until its own file says so
   };
   const status = (t, cls = '') => { $('status').textContent = t; $('status').className = 'meta ' + cls; };
   const today = () => { const d = new Date(nyNow()); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -1213,10 +1214,23 @@
   const saver = PlannerSave.create({
     get: (k) => store.get(k), set: (k, v) => store.set(k, v), key: 'outbox', append: appendInbox, locks: navigator.locks,
     onError: (e, n) => status(`Not saved yet (${n} waiting): ${e.message}. Trying again shortly.`, 'bad'),
+    onSaved: () => { if (!saver.waiting().length && /^Not saved yet/.test($('status').textContent)) status('Saved what was waiting.'); },
   });
   const outbox = () => saver.waiting();
   const setOutbox = (l) => store.set('outbox', JSON.stringify(l));
   const flush = () => saver.flush();
+  // what the planner engine reads: engine/capabilities.json on the branch the inbox is written to (the repository's
+  // default branch), read once per repository and token with the same contents reader; until it says so, every line
+  // is saved exactly as typed (save.js, COMPATIBILITY.md)
+  PlannerSave.useEngine({
+    key: () => (MOCK ? 'demo' : `${store.get('repo', $('repo').value)}@default-branch\n${store.get('token')}`),
+    read: async () => {
+      if (MOCK) return globalThis.__MOCK_CAPS == null ? { status: 404 } : { status: 200, text: String(globalThis.__MOCK_CAPS) }; // demo: none unless a test sets one
+      if (!store.get('token')) return { status: 401 };
+      const r = await api('engine/capabilities.json');
+      return r.ok ? { status: 200, text: b64decode((await r.json()).content) } : { status: r.status };
+    },
+  });
   window.addEventListener('online', () => { if (outbox().length) flush(); });
 
   // ---------- render ----------
@@ -1552,12 +1566,16 @@
   // ---------- the spelling check: fixes shown in #heard, "Keep my words" puts the user's words back ----------
   let pendingFix = null, sentFix = null, pendingAi = null, heardText = '';
   const personalWords = () => { try { return PlannerSpeech.vocabFrom(next); } catch { return []; } };
-  const aiOn = () => store.get('proofread', 'on') !== 'off' && !!store.get('helperUrl') && !!store.get('helperPass') && !!globalThis.PlannerCheck;
+  // the spelling check and the AI proofread run only for an engine verified to read "| said" (save.js); otherwise the
+  // line is saved exactly as typed
+  const grammarOn = () => PlannerSave.engineCaps().said;
+  const aiOn = () => grammarOn() && store.get('proofread', 'on') !== 'off' && !!store.get('helperUrl') && !!store.get('helperPass') && !!globalThis.PlannerCheck;
   const hasText = (lines) => { try { return lines.some((l) => { const p = PlannerCheck.parseLine(l); return p && !p.skip && p.fields.length; }); } catch { return false; } };
-  const fixOf = (orig, res) => (res.some((x) => x.changed) ? { orig: orig.slice(), lines: res.map((x) => x.line), results: res, changes: res.flatMap((x) => x.changes) } : null);
+  // only the fixes in fields the engine reads (its tags) count; a field it doesn't read stays as typed
+  const fixOf = (orig, all) => { const res = PlannerSave.limitResults(orig, all); return res.some((x) => x.changed) ? { orig: orig.slice(), lines: res.map((x) => x.line), results: res, changes: res.flatMap((x) => x.changes) } : null; };
   function spellFix(lines) {
     try {
-      if (!globalThis.PlannerCheck || !PlannerCheck.ready()) return null;
+      if (!grammarOn() || !globalThis.PlannerCheck || !PlannerCheck.ready()) return null;
       return fixOf(lines, PlannerCheck.fixLines(lines, { words: personalWords() }));
     } catch { return null; }
   }
@@ -1590,7 +1608,8 @@
     const fx = sentFix;
     if (!fx) return;
     const ob = outbox(), changed = fx.results.map((r, i) => ({ r, i })).filter((x) => x.r.changed), at = changed.map((x) => ob.indexOf(fx.lines[x.i]));
-    if (!saver.busy() && at.every((i) => i >= 0)) { // still waiting in the outbox: swap in the user's words
+    const swap = !saver.busy() && at.every((i) => i >= 0);
+    if (swap) { // still waiting in the outbox: swap in the user's words
       changed.forEach((x, k) => { ob[at[k]] = fx.orig[x.i]; });
       setOutbox(ob);
     } else if (PlannerSave.engineCaps().keepWords) { // already saved (or being saved): the planner puts the user's words back
@@ -1603,7 +1622,8 @@
     }
     sentFix = null;
     flush();
-    $('fixNote').textContent = 'Keeping your words.';
+    // in the outbox it was swapped here; once saved, the planner decides (it leaves a line that changed since alone)
+    $('fixNote').textContent = swap ? 'Keeping your words.' : 'Sent your words to the planner. It puts them back if that line hasn’t changed since.';
   }
   const localNow = () => { const d = new Date(nyNow()), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
   // Recheck: asks the engine to recompute now. It records nothing and does not move the scheduled recheck.

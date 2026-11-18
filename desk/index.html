@@ -459,6 +459,18 @@
     onSaved: () => { if (notSaved && !saver.waiting().length) { notSaved = false; status('Saved what was waiting.'); } },
   });
   const flush = () => saver.flush();
+  // what the planner engine reads: engine/capabilities.json on the branch the inbox is written to (the repository's
+  // default branch), read once per repository and token with the same contents reader as the phone view; until it
+  // says so, every line is saved exactly as typed (save.js, COMPATIBILITY.md)
+  PlannerSave.useEngine({
+    key: () => (MOCK ? 'demo' : `${store.get('repo')}@default-branch\n${store.get('token')}`),
+    read: async () => {
+      if (MOCK) return globalThis.__MOCK_CAPS == null ? { status: 404 } : { status: 200, text: String(globalThis.__MOCK_CAPS) }; // demo: none unless a test sets one
+      if (!store.get('token')) return { status: 401 };
+      const r = await api('engine/capabilities.json');
+      return r.ok ? { status: 200, text: b64decode((await r.json()).content) } : { status: r.status };
+    },
+  });
   if (!MOCK && saver.waiting().length) setTimeout(() => flush(), 1500);
   window.addEventListener('online', () => { if (saver.waiting().length) flush(); });
   // send lines, then wait for the planner to work out the next step (it runs on GitHub, about a minute)
@@ -1630,13 +1642,18 @@
   // ---------- the spelling check (check.js): fixes are marked before Save, with Accept all and Keep mine ----------
   // personal words: the planner's own words on screen, every step title this view has loaded and the project names
   const deskWords = () => { const out = []; try { out.push(...PlannerSpeech.vocabFrom(next)); } catch {} for (const t of pd?.tasks || []) out.push(t.text); for (const p of next?.projects || []) out.push(p.name); return out; };
-  const aiOn = () => store.get('proofread', 'on') !== 'off' && !!store.get('helperUrl') && !!store.get('helperPass');
+  // the spelling check and the AI proofread run only for an engine verified to read "| said" (save.js); otherwise the
+  // lines are saved exactly as typed
+  const grammarOn = () => PlannerSave.engineCaps().said;
+  const aiOn = () => grammarOn() && store.get('proofread', 'on') !== 'off' && !!store.get('helperUrl') && !!store.get('helperPass');
   /** The lines with their free text fixed: { lines, orig, results, changes }, or null when nothing changed or the check can't run. Never throws. */
   async function checkLines(lines) {
     try {
-      if (!globalThis.PlannerCheck || !PlannerCheck.ready()) return null;
+      if (!grammarOn() || !globalThis.PlannerCheck || !PlannerCheck.ready()) return null;
       const words = deskWords();
-      const res = aiOn() ? await PlannerCheck.proofreadLines(lines, { words, url: store.get('helperUrl'), pass: store.get('helperPass'), timeoutMs: 8000 }) : PlannerCheck.fixLines(lines, { words });
+      const all = aiOn() ? await PlannerCheck.proofreadLines(lines, { words, url: store.get('helperUrl'), pass: store.get('helperPass'), timeoutMs: 8000 }) : PlannerCheck.fixLines(lines, { words });
+      if (!grammarOn()) return null; // the configuration changed during the check: not verified for it
+      const res = PlannerSave.limitResults(lines, all); // only fields the engine reads (its tags) keep a fix
       return res.some((x) => x.changed) ? { orig: lines.slice(), lines: res.map((x) => x.line), results: res, changes: res.flatMap((x) => x.changes) } : null;
     } catch { return null; }
   }
@@ -1825,6 +1842,7 @@
     store.set('proofread', $('proofread').checked ? 'on' : 'off');
     if ($('helperPass').value.trim()) store.set('helperPass', $('helperPass').value.trim());
     $('token').value = ''; $('helperPass').value = ''; show('home'); refresh();
+    PlannerSave.checkEngine(); // another repository or token: not verified for it until its own file says so
   };
   // a long random password for the helper: put the same one on Vercel as PLANNER_PASS
   $('makePass').onclick = async () => {

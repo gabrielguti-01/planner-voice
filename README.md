@@ -9,3 +9,5 @@ Demo with sample data: add `?mock=1` to the address.
 Test copy with made-up tasks: `test/`. It runs the planner engine inside the page (read from your repository, read-only, with the token already saved) and never writes to GitHub.
 
 Tests (made-up data, a mocked AI helper and a stand-in for GitHub; nothing leaves the machine): `node --test --test-concurrency=1 tests/*.test.mjs`. The page tests use the Playwright and Chromium already on the machine.
+
+What the page needs from the planner engine before it sends spelling fixes (`engine/capabilities.json`), and what it does without it: `COMPATIBILITY.md`.

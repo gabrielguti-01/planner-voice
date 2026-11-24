@@ -170,7 +170,8 @@ test('the file check refuses anything it cannot vouch for', () => {
 test('a planner reminder carries a name and a date, never an amount', () => {
   const plan = { who: 'Shop | Co: x', autopay: null };
   const line = M.reminderLine(plan, '2030-03-10');
-  assert.match(line, /^add: Shop Co x payment due Sun Mar 10: check in Money that it's covered \| due 2030-03-10 \| not_before 2030-03-08 \| size small$/);
+  // due the day before the payment, shown two days before that
+  assert.match(line, /^add: Shop Co x payment due Sun Mar 10: check in Money that it's covered \| due 2030-03-09 \| not_before 2030-03-07 \| size small$/);
   assert.doesNotMatch(line, /\$|\d+\.\d\d/);
   assert.match(M.reminderLine({ who: '', autopay: false }, '2030-03-10'), /^add: Pay the payment by Sun Mar 10 \(the amount is in Money\) \|/);
 });

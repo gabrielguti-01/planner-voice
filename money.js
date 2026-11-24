@@ -204,11 +204,12 @@
     return best;
   }
 
-  /** the planner line for a plan's next payment: a name and a date, never an amount */
+  /** the planner line for a plan's next payment: a name and a date, never an amount. It's due the day before the
+   *  payment (a charge can land early in the morning) and shows up two days before that. */
   function reminderLine(plan, due) {
     const when = dayLabel(due).replace(',', ''), who = (plan.who || '').replace(/[|:]/g, ' ').replace(/\s+/g, ' ').trim();
     const title = plan.autopay === false ? `Pay ${who || 'the payment'} by ${when} (the amount is in Money)` : `${who ? who + ' payment' : 'Payment'} due ${when}: check in Money that it's covered`;
-    return `add: ${title} | due ${due} | not_before ${addDays(due, -2)} | size small`;
+    return `add: ${title} | due ${addDays(due, -1)} | not_before ${addDays(due, -3)} | size small`;
   }
 
   // ---------- changes: each returns a new file; history rows are only ever added ----------

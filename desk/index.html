@@ -209,6 +209,39 @@
   .tcard .tuck { font-size: 12px; color: var(--moss); }
   .colhead.q { color: var(--rain); }
   .tcard.goal.small { min-height: 0; }
+  /* Money (laptop only; money.js): the numbers stay in a folder on this computer */
+  #v-money { display: flex; flex-direction: column; gap: 22px; }
+  #v-money h2.view + .mny-note { margin-top: -14px; }
+  .mny-note { margin: 0; font-size: 13.5px; }
+  h1.step.mny-head { font-size: 32px; }
+  h3.mny { font: 500 24px var(--serif); margin: 0; }
+  .mny-sub { margin: 4px 0 8px; }
+  .mny-lines p { margin: 0 0 10px; }
+  .mny-big { font: 600 24px var(--serif); color: var(--brass-hi); }
+  .mny-ink { color: var(--ink); }
+  .mny-small { font-size: 13px; }
+  .mny-have { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--row); }
+  .mny-have p { margin: 0; }
+  .mny-checks li .t { flex: 1 1 auto; }
+  .mny-row .d { flex: 0 0 104px; color: var(--dim); font-size: 14px; }
+  .mny-row .t { flex: 1 1 auto; min-width: 0; }
+  .mny-row .t small, .mny-row .a small { display: block; color: var(--dim); font-size: 12.5px; }
+  .mny-row .a { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mny-in { color: var(--moss); }
+  .badge.warn { color: var(--brass-hi); }
+  .badge.bad { color: var(--coral); }
+  li.mny-formrow { display: block; }
+  .mny-plan { padding: 14px 0; border-top: 1px solid var(--row); }
+  .mny-plan p { margin: 4px 0 8px; }
+  .mny-ptitle { font-size: 17px; }
+  .mny-pays { list-style: none; margin: 0 0 10px; padding: 0; color: var(--dim); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .mny-pays li { padding: 2px 0; }
+  .mny-pays li.done { color: var(--moss); }
+  .mny-form select, .mny-form input { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--btn-line); background: var(--side); color: var(--ink); font: inherit; }
+  .mny-form .field small { font-size: 12.5px; }
+  .mny-hist summary { cursor: pointer; font: 500 20px var(--serif); }
+  .mny-undone .t { text-decoration: line-through; color: var(--dim); }
+  .mny-file { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 0 4px; }
   @media (max-width: 760px) { nav.side { display: none; } main { padding: 24px 16px 48px; } h1.step { font-size: 30px; } .card { padding: 22px; } }
 </style>
 </head>
@@ -232,6 +265,7 @@
     <button class="nav" data-view="shopping" aria-label="Shopping"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M3 4h2l2.4 11h11l2-8H6.2"/></svg><span class="lbl">Shopping</span><span class="count lbl" id="cShop"></span></button>
     <button class="nav" data-view="week" aria-label="Coming up"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lbl">Coming up</span></button>
     <button class="nav" data-view="goals" aria-label="Goals"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span class="lbl">Goals</span></button>
+    <button class="nav" data-view="money" aria-label="Money"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M16 14.5h2"/></svg><span class="lbl">Money</span></button>
     <div class="side-foot">
       <button class="nav" data-view="settings" aria-label="Settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span class="lbl">Settings</span></button>
       <a class="nav" href="../?phone" aria-label="Phone view" style="text-decoration:none;color:inherit"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg><span class="lbl">Phone view</span></a>
@@ -331,6 +365,7 @@
       <section id="v-shopping" class="view-sec hidden"><h2 class="view">Shopping</h2><div class="panel" style="margin-top:18px"><div class="pad"><ul class="list" id="shopList"></ul></div></div><p class="dim">Check items off in the phone view while you shop.</p></section>
       <section id="v-week" class="view-sec hidden"><h2 class="view">Coming up</h2><div class="panel" style="margin-top:18px"><div class="pad"><ul class="list" id="weekList"></ul></div></div></section>
       <section id="v-goals" class="view-sec hidden"><h2 class="view">Goals</h2><div class="panel" style="margin-top:18px"><div class="pad" id="goalList"></div></div></section>
+      <section id="v-money" class="view-sec hidden" aria-label="Money"></section>
       <section id="v-settings" class="view-sec hidden"><h2 class="view">Settings</h2>
         <div class="panel" style="margin-top:18px"><div class="pad">
           <p class="dim" style="margin-top:0">Same connection as the phone view: if you've connected the phone view in this browser, there's nothing to do here.</p>
@@ -368,6 +403,7 @@
 
 <script src="../speech.js?v=20261029a"></script>
 <script src="../reason.js?v=20261107a"></script>
+<script src="../money.js?v=20261124a"></script>
 <script>
 (() => {
   'use strict';
@@ -686,6 +722,7 @@
   // A file that isn't there (404) is read as empty: steps then sit under "Unsorted" and finished ones come from history.
   let curProject = urlProject || tab.get('project') || store.get('deskProject'), pv = store.get('deskPV', 'flow'), sel = null, model = null, pd = null, showAllLocked = false;
   let curView = urlProject ? 'project' : tab.get('view') || store.get('deskView');
+  let moneyOn = false; // the Money tab is set up the first time it's opened
   if (!['flow', 'brain', 'list'].includes(pv)) pv = pv === 'graph' ? 'brain' : 'flow';
   const mockFiles = new Map(); // test copies only: files "written" by the page
   if (MOCK) globalThis.__mockFiles = mockFiles;
@@ -1689,6 +1726,8 @@
     $('mainCol').classList.toggle('wide', view === 'project' || view === 'allbrain');
     stopGraph();
     curView = view; tab.set('view', view); store.set('deskView', view);
+    // Money opens its own file the first time it's shown (money.js; laptop only, nothing in it goes to GitHub)
+    if (view === 'money' && !moneyOn && globalThis.PlannerMoney) { moneyOn = true; PlannerMoney.mount($('v-money'), { mock: MOCK, today, send }); }
     if (view === 'project' && curProject) tab.set('project', curProject);
     // the address names this window's open project, so a reload keeps it and the link can be copied
     try { const u = new URL(location.href); if (view === 'project' && curProject) u.searchParams.set('project', curProject); else u.searchParams.delete('project'); if (u.href !== location.href) history.replaceState(null, '', u); } catch {}
@@ -1732,7 +1771,7 @@
     } catch (e) { status(e.message, true); }
   }
   globalThis.__deskRefresh = refresh; // for testing with ?mock
-  show(['home', 'today', 'projects', 'allbrain', 'workout', 'shopping', 'week', 'goals'].includes(curView) || (curView === 'project' && curProject) ? curView : 'home');
+  show(['home', 'today', 'projects', 'allbrain', 'workout', 'shopping', 'week', 'goals', 'money'].includes(curView) || (curView === 'project' && curProject) ? curView : 'home');
   refresh();
   // anything still waiting in this browser's outbox (a save that failed, or a page closed mid-save) goes out now
   if (outbox().length) setTimeout(() => flush(), 1500);
